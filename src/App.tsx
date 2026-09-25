@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   NetworkDevice,
   NetworkLink,
@@ -18,7 +18,7 @@ import { calculateLinkCongestion } from './utils/trafficEngine';
 import { Header } from './components/Header';
 import { Toolbar, ActiveTool } from './components/Toolbar';
 import { DeviceSidebar } from './components/DeviceSidebar';
-import { Canvas } from './components/Canvas';
+import { Canvas, CanvasHandle } from './components/Canvas';
 import { DeviceConfigModal } from './components/DeviceConfigModal';
 import { PortSelectorModal } from './components/PortSelectorModal';
 import { PingTestModal } from './components/PingTestModal';
@@ -68,6 +68,11 @@ export default function App() {
 
   // Mobile sidebar state
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  // Ref to the Canvas so we can trigger fit-to-view after a topology loads
+  // (preset scenario selected, JSON imported), keeping it centered on any
+  // screen size instead of drifting off-screen on mobile.
+  const canvasRef = useRef<CanvasHandle>(null);
 
   // Modal Views
   const [configuringDevice, setConfiguringDevice] = useState<NetworkDevice | null>(null);
@@ -397,6 +402,7 @@ export default function App() {
     pushHistory(scenario.devices, scenario.links, `Muat: ${scenario.name}`);
     showToast(`Topologi "${scenario.name}" berhasil dimuat.`);
     addLog(`[${new Date().toLocaleTimeString('id-ID')}] [Skenario] Memuat topologi ${scenario.name}.`);
+    requestAnimationFrame(() => canvasRef.current?.fitView());
   };
 
   // Apply auto-fix from diagnostics drawer
@@ -452,6 +458,7 @@ export default function App() {
       pushHistory(data.devices, data.links, `Import ${data.name || 'Topologi'}`);
       showToast('Topologi berhasil diimport dari file JSON.');
       addLog(`[${new Date().toLocaleTimeString('id-ID')}] [Import] File topologi ${data.name || 'Baru'} diimport.`);
+      requestAnimationFrame(() => canvasRef.current?.fitView());
     } else {
       showToast('Format JSON tidak sesuai dengan skema TERMINATOR.');
     }
@@ -568,8 +575,10 @@ export default function App() {
         {/* Central Canvas Workspace */}
         <div className="flex-1 flex flex-col relative overflow-hidden">
           {/* Top Floating Toolbar */}
-          <div className="absolute top-4 left-4 sm:left-6 z-20 max-w-[95%] overflow-x-auto">
-            <Toolbar
+          <div className="absolute top-4 left-4 right-4 sm:left-6 sm:right-auto z-20">
+          <div className="relative">
+            <div className="max-w-full overflow-x-auto no-scrollbar">
+              <Toolbar
               activeTool={activeTool}
               setActiveTool={(tool) => {
                 setActiveTool(tool);
@@ -584,11 +593,17 @@ export default function App() {
               undoDescription={undoDescription}
               redoDescription={redoDescription}
               onOpenExportImage={() => setIsExportImageOpen(true)}
-            />
+              />
+            </div>
+            {/* Fade hint showing the toolbar is horizontally scrollable on
+                narrow/mobile screens where not all tools fit at once */}
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-slate-950/90 to-transparent sm:hidden rounded-r-xl" />
+          </div>
           </div>
 
           {/* Interactive Topology Canvas */}
           <Canvas
+            ref={canvasRef}
             devices={devices}
             links={links}
             selectedDeviceId={selectedDeviceId}

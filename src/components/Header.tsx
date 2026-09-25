@@ -145,19 +145,21 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        {/* Preset Scenarios Selector */}
-        <div className="hidden lg:flex items-center gap-1.5 pl-3 border-l border-slate-800">
-          <span className="text-xs text-slate-400 font-medium">Skenario:</span>
+        {/* Preset Scenarios Selector — visible on all screen sizes so mobile
+            learners can also load example topologies, not just desktop */}
+        <div className="flex items-center gap-1.5 pl-2 sm:pl-3 border-l border-slate-800 min-w-0">
+          <span className="text-xs text-slate-400 font-medium hidden lg:inline shrink-0">Skenario:</span>
           <select
             onChange={(e) => {
               const sc = PRESET_SCENARIOS.find((s) => s.id === e.target.value);
               if (sc) onSelectScenario(sc);
             }}
             defaultValue=""
-            className="bg-slate-950 border border-slate-800 text-xs text-slate-300 rounded-lg px-2.5 py-1 focus:outline-none focus:border-blue-500 hover:border-slate-700 font-medium transition-colors max-w-xs truncate"
+            title="Muat Skenario Topologi Contoh"
+            className="bg-slate-950 border border-slate-800 text-xs text-slate-300 rounded-lg px-2 sm:px-2.5 py-1 focus:outline-none focus:border-blue-500 hover:border-slate-700 font-medium transition-colors w-24 sm:w-auto sm:max-w-[10rem] lg:max-w-xs truncate"
           >
             <option value="" disabled>
-              Pilih Skenario Topologi...
+              Pilih Skenario...
             </option>
             {PRESET_SCENARIOS.map((s) => (
               <option key={s.id} value={s.id}>
@@ -169,7 +171,8 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Main Action Buttons */}
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto">
+      <div className="relative flex-1 min-w-0 flex justify-end">
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pr-1">
         {/* Test Ping Button */}
         <button
           onClick={onOpenPingModal}
@@ -256,7 +259,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={() => fileInputRef.current?.click()}
           title="Buka / Import file topologi (.json)"
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors hidden lg:block"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
         >
           <FolderOpen className="w-4 h-4" />
         </button>
@@ -265,7 +268,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onExportJson}
           title="Simpan / Export topologi (.json)"
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors hidden lg:block"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
         >
           <Download className="w-4 h-4" />
         </button>
@@ -274,7 +277,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onClearCanvas}
           title="Bersihkan kanvas (Mulai dari awal)"
-          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors"
+          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors shrink-0"
         >
           <RotateCcw className="w-4 h-4" />
         </button>
@@ -283,10 +286,15 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onOpenHelp}
           title="Bantuan & Petunjuk Penggunaan"
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
         >
           <HelpCircle className="w-4 h-4" />
         </button>
+      </div>
+
+      {/* Fade hint showing the action row is horizontally scrollable on
+          narrow/mobile screens where not all buttons fit at once */}
+      <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-slate-900 to-transparent sm:hidden" />
       </div>
     </header>
   );

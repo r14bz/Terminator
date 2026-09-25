@@ -153,7 +153,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               key={t.id}
               onClick={() => setActiveTool(t.id)}
               title={`${t.label} ${t.shortcut ? `(${t.shortcut})` : ''}`}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-medium transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 py-2 sm:py-1.5 rounded-lg font-medium transition-all ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                   : 'text-slate-300 hover:bg-slate-800 hover:text-white'

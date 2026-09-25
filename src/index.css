@@ -16,6 +16,17 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: rgba(71, 85, 105, 1);
   }
+
+  /* Hides the scrollbar track/thumb while keeping the element scrollable —
+     used for the mobile header action row and toolbar, where a visible
+     fade-edge hint communicates "scroll for more" instead of a scrollbar. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Print styling for Documentation Report */

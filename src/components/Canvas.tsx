@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
 import {
   NetworkDevice,
   NetworkLink,
@@ -58,6 +58,10 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Cloud,
 };
 
+export interface CanvasHandle {
+  fitView: () => void;
+}
+
 interface CanvasProps {
   devices: NetworkDevice[];
   links: NetworkLink[];
@@ -78,7 +82,7 @@ interface CanvasProps {
   onDropNewDevice: (type: string, x: number, y: number) => void;
 }
 
-export const Canvas: React.FC<CanvasProps> = ({
+export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
   devices,
   links,
   selectedDeviceId,
@@ -96,7 +100,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   onDeviceClickWithTool,
   onDeleteSelected,
   onDropNewDevice,
-}) => {
+}, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Zoom & Pan state
@@ -248,7 +252,7 @@ export const Canvas: React.FC<CanvasProps> = ({
     onDropNewDevice(deviceType, Math.round(dropX / 10) * 10, Math.round(dropY / 10) * 10);
   };
 
-  const handleFitView = () => {
+  const handleFitView = useCallback(() => {
     if (devices.length === 0) {
       setZoom(1);
       setPan({ x: 0, y: 0 });
@@ -280,7 +284,40 @@ export const Canvas: React.FC<CanvasProps> = ({
       x: (containerWidth - width * newZoom) / 2 - minX * newZoom + padding * newZoom,
       y: (containerHeight - height * newZoom) / 2 - minY * newZoom + padding * newZoom,
     });
-  };
+  }, [devices]);
+
+  // Expose fitView so the parent (App) can re-center the topology after
+  // loading a preset scenario, importing a file, or on initial page load.
+  useImperativeHandle(ref, () => ({
+    fitView: handleFitView,
+  }), [handleFitView]);
+
+  // Auto-fit the topology into view on first mount (fixes topology being
+  // invisible off-screen on small/mobile viewports where the canvas is
+  // narrower than the desktop layout the devices were originally placed for).
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => handleFitView());
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-fit when the viewport is resized or the device orientation changes
+  // (e.g. rotating a phone/tablet), so the topology stays centered and
+  // visible instead of drifting off-screen.
+  useEffect(() => {
+    let resizeTimer: ReturnType<typeof setTimeout>;
+    const handleResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => handleFitView(), 200);
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      clearTimeout(resizeTimer);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, [handleFitView]);
 
   return (
     <div
@@ -707,4 +744,6 @@ export const Canvas: React.FC<CanvasProps> = ({
       )}
     </div>
   );
-};
+});
+
+Canvas.displayName = 'Canvas';
