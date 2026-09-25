@@ -114,6 +114,16 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
   const [nodeOffset, setNodeOffset] = useState({ x: 0, y: 0 });
   const [nodeDragOrigin, setNodeDragOrigin] = useState<{ id: string; x: number; y: number } | null>(null);
 
+  // Two-finger pinch-to-zoom gesture state. Stored in a ref (not React state)
+  // because it's read/written on every touchmove frame and doesn't need to
+  // trigger re-renders itself — only zoom/pan do.
+  const pinchStateRef = useRef<{
+    distance: number;
+    zoom: number;
+    pan: { x: number; y: number };
+    mid: { x: number; y: number };
+  } | null>(null);
+
   // Congestion metrics
   const linkCongestions = calculateLinkCongestion(devices, links, activeStreams);
   const congestionMap = new Map<string, LinkCongestionMetrics>(
@@ -170,7 +180,34 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
   };
 
   // Touch event handlers for Mobile friendly support
+  const getTouchDistance = (touches: React.TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const getTouchMidpoint = (touches: React.TouchList, containerRect: DOMRect) => ({
+    x: (touches[0].clientX + touches[1].clientX) / 2 - containerRect.left,
+    y: (touches[0].clientY + touches[1].clientY) / 2 - containerRect.top,
+  });
+
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      // Two fingers down: start a pinch-to-zoom gesture. Cancel any single-
+      // finger pan/drag that may have been in progress.
+      setIsPanning(false);
+      setDraggingNodeId(null);
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (!containerRect) return;
+      pinchStateRef.current = {
+        distance: getTouchDistance(e.touches),
+        zoom,
+        pan,
+        mid: getTouchMidpoint(e.touches, containerRect),
+      };
+      return;
+    }
+
     if (e.touches.length === 1 && (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg')) {
       const touch = e.touches[0];
       setIsPanning(true);
@@ -179,6 +216,28 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchStateRef.current) {
+      // Pinch-to-zoom: scale relative to the gesture's starting distance,
+      // keeping the midpoint between the two fingers anchored on-screen
+      // (same math as the mouse-wheel zoom, just driven by touch distance).
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (!containerRect) return;
+
+      const { distance: startDistance, zoom: startZoom, pan: startPan, mid } = pinchStateRef.current;
+      if (startDistance < 1) return;
+
+      const newDistance = getTouchDistance(e.touches);
+      const scaleFactor = newDistance / startDistance;
+      const newZoom = Math.min(Math.max(0.4, startZoom * scaleFactor), 2.5);
+
+      setZoom(newZoom);
+      setPan({
+        x: mid.x - (mid.x - startPan.x) * (newZoom / startZoom),
+        y: mid.y - (mid.y - startPan.y) * (newZoom / startZoom),
+      });
+      return;
+    }
+
     if (e.touches.length === 1) {
       const touch = e.touches[0];
       if (isPanning) {
@@ -201,7 +260,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
     }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    // Once fewer than two fingers remain, the pinch gesture is over.
+    if (e.touches.length < 2) {
+      pinchStateRef.current = null;
+    }
     setIsPanning(false);
     if (draggingNodeId && nodeDragOrigin && onDeviceMoveEnd) {
       const currentDev = devices.find((d) => d.id === draggingNodeId);

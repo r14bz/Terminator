@@ -574,11 +574,10 @@ export default function App() {
 
         {/* Central Canvas Workspace */}
         <div className="flex-1 flex flex-col relative overflow-hidden">
-          {/* Top Floating Toolbar */}
-          <div className="absolute top-4 left-4 right-4 sm:left-6 sm:right-auto z-20">
-          <div className="relative">
-            <div className="max-w-full overflow-x-auto no-scrollbar">
-              <Toolbar
+          {/* Top Floating Toolbar — wraps onto multiple lines on narrow
+              screens instead of hiding tools behind horizontal scroll */}
+          <div className="absolute top-4 left-4 right-4 sm:left-6 sm:right-auto sm:max-w-[calc(100vw-3rem)] z-20">
+            <Toolbar
               activeTool={activeTool}
               setActiveTool={(tool) => {
                 setActiveTool(tool);
@@ -593,12 +592,7 @@ export default function App() {
               undoDescription={undoDescription}
               redoDescription={redoDescription}
               onOpenExportImage={() => setIsExportImageOpen(true)}
-              />
-            </div>
-            {/* Fade hint showing the toolbar is horizontally scrollable on
-                narrow/mobile screens where not all tools fit at once */}
-            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-slate-950/90 to-transparent sm:hidden rounded-r-xl" />
-          </div>
+            />
           </div>
 
           {/* Interactive Topology Canvas */}
@@ -631,9 +625,9 @@ export default function App() {
 
           {/* Toast Notification Banner */}
           {toastMessage && (
-            <div className="absolute bottom-6 left-6 z-30 bg-slate-900/95 border border-slate-700/80 text-white text-xs px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200">
-              <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
-              <span>{toastMessage}</span>
+            <div className="absolute left-3 right-3 sm:left-6 sm:right-auto bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-6 z-30 sm:max-w-md bg-slate-900/95 border border-slate-700/80 text-white text-xs px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200">
+              <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping shrink-0" />
+              <span className="leading-snug">{toastMessage}</span>
             </div>
           )}
         </div>
