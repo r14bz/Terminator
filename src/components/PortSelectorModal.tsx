@@ -47,31 +47,33 @@ export const PortSelectorModal: React.FC<PortSelectorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/60">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-blue-600/20 text-blue-400">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-800 bg-slate-950/60 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-lg bg-blue-600/20 text-blue-400 shrink-0">
               <Cable className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="text-base font-semibold text-white">Hubungkan Kabel Antar Perangkat</h3>
-              <p className="text-xs text-slate-400">
+            <div className="min-w-0">
+              <h3 className="text-sm sm:text-base font-semibold text-white truncate">Hubungkan Kabel Antar Perangkat</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate">
                 Pilih port fisik pada masing-masing perangkat untuk memasang kabel
               </p>
             </div>
           </div>
           <button
             onClick={onCancel}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors shrink-0 ml-2"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        {/* Form Body — scrolls independently so the header and action
+            buttons below always stay reachable, even on short mobile
+            screens where the full form doesn't fit at once. */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 space-y-5 sm:space-y-6">
           {/* Cable Type Selector */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-2">
