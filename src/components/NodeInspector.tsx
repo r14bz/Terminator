@@ -5,6 +5,7 @@ import { DEVICE_METADATA } from '../data/deviceDefinitions';
 import { DEVICE_BRANDS } from '../data/deviceBrands';
 import type { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { findUpstreamGateway, isSameSubnet, isValidIpv4, checkInternetAccess } from '../utils/ipUtils';
+import { allocateDhcpLease, allocateStaticHost, gatewayAddressOf } from '../utils/ipAlloc';
 
 interface NodeInspectorProps {
   node: NetworkNode;
@@ -1019,7 +1020,14 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                         ...node,
                         ipConfig: {
                           mode: 'static',
-                          ip: node.ipConfig?.ip ?? '192.168.88.1',
+                          // Keep the address the gateway already has; if it has
+                          // none, take a free one rather than inventing
+                          // 192.168.88.1, which is a real address elsewhere in
+                          // the shipped SOHO template.
+                          ip:
+                            node.ipConfig?.ip ||
+                            allocateStaticHost(upstreamGateway, allNodes) ||
+                            '',
                           subnet: node.ipConfig?.subnet ?? '255.255.255.0',
                           gateway: node.ipConfig?.gateway ?? '180.252.10.1',
                           dns: node.ipConfig?.dns ?? '8.8.8.8',
@@ -1241,7 +1249,14 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                           ...node,
                           ipConfig: {
                             mode: 'static',
-                            ip: node.ipConfig?.ip || '192.168.1.100',
+                            // A free host on the LAN, not a fixed .100. The
+                            // constant put every client that had no lease yet
+                            // onto 192.168.1.100, colliding with whatever was
+                            // already there.
+                            ip:
+                              node.ipConfig?.ip ||
+                              allocateStaticHost(upstreamGateway, allNodes) ||
+                              '',
                             subnet: node.ipConfig?.subnet || routerSubnet || '255.255.255.0',
                             gateway: node.ipConfig?.gateway || routerLanIp || '192.168.1.1',
                             dns: node.ipConfig?.dns || '8.8.8.8',
@@ -1257,18 +1272,30 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       Static IP
                     </button>
                     <button
-                      onClick={() =>
+                      onClick={() => {
+                        // A real lease: the first address in the server's pool
+                        // that nobody holds. The old code wrote a hardcoded
+                        // `<subnet>.115` for every client, so two routers on one
+                        // hub both came up as 192.168.88.115 -- and the same
+                        // constant was written into `gateway`, leaving each
+                        // router's default gateway equal to its own address.
+                        //
+                        // `no lease` (pool full, or no DHCP server reachable)
+                        // leaves the address empty rather than inventing one;
+                        // the APIPA panel below already covers that state.
+                        const lease = allocateDhcpLease(upstreamGateway, allNodes, node.id);
+                        const leaseGateway = gatewayAddressOf(upstreamGateway) || routerLanIp;
                         onUpdateNode({
                           ...node,
                           ipConfig: {
                             mode: 'dhcp',
-                            ip: node.ipConfig?.ip || `${routerLanIp.replace(/\.\d+$/, '')}.115`,
+                            ip: lease ?? '',
                             subnet: routerSubnet || '255.255.255.0',
-                            gateway: routerLanIp || '192.168.1.1',
+                            gateway: leaseGateway,
                             dns: '8.8.8.8',
                           },
-                        })
-                      }
+                        });
+                      }}
                       className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
                         node.ipConfig?.mode === 'dhcp'
                           ? 'bg-white text-slate-900 shadow-2xs font-bold'
@@ -1313,7 +1340,18 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                         <div className="grid grid-cols-2 gap-1.5 pt-1 font-mono text-[10px] text-slate-700">
                           <div className="bg-white p-1.5 rounded border border-sky-100">
                             <span className="text-[9px] text-slate-400 block font-sans">IP Diperoleh:</span>
-                            <span className="font-bold text-sky-800">{node.ipConfig?.ip || '192.168.1.100'}</span>
+                            {/* Shown only when a lease actually exists. This used
+                                to fall back to a hardcoded 192.168.1.100, so a
+                                client with no lease -- and every client before
+                                the pool-aware allocator existed -- displayed
+                                the same made-up address. */}
+                            {isValidIpv4(node.ipConfig?.ip ?? '') ? (
+                              <span className="font-bold text-sky-800">{node.ipConfig?.ip}</span>
+                            ) : (
+                              <span className="font-bold text-amber-700">
+                                Belum ada lease (APIPA 169.254.x.x)
+                              </span>
+                            )}
                           </div>
                           <div className="bg-white p-1.5 rounded border border-sky-100">
                             <span className="text-[9px] text-slate-400 block font-sans">Subnet Mask:</span>
@@ -1321,7 +1359,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                           </div>
                           <div className="bg-white p-1.5 rounded border border-sky-100">
                             <span className="text-[9px] text-slate-400 block font-sans">Gateway:</span>
-                            <span className="font-bold text-emerald-700">{routerLanIp}</span>
+                            <span className="font-bold text-emerald-700">
+                              {node.ipConfig?.gateway || routerLanIp}
+                            </span>
                           </div>
                           <div className="bg-white p-1.5 rounded border border-sky-100">
                             <span className="text-[9px] text-slate-400 block font-sans">DNS:</span>

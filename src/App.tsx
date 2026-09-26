@@ -21,6 +21,8 @@ import { calculateOpticalPowers } from './utils/opticalCalculator';
 import { runNetworkDiagnostics } from './utils/diagnosticEngine';
 import { planPing } from './utils/pingTool';
 import { findFreeSlot } from './utils/nodePlacement';
+import { mediumForCable, reconcilePorts, synthesisePort } from './utils/portReconcile';
+import { allocateStaticHost, gatewayAddressOf, primaryGateway } from './utils/ipAlloc';
 import { zoomIn, zoomOut } from './utils/zoom';
 import type { HistoryState } from './utils/historyCore';
 import { canRedo as stackCanRedo, canUndo as stackCanUndo, createHistory, isSameSnapshot, pushSnapshot, redo as stackRedo, undo as stackUndo } from './utils/historyCore';
@@ -30,10 +32,16 @@ import { toPng } from 'html-to-image';
 // would alias the same node/cable objects, so any in-place mutation (e.g.
 // auto-created ports) would permanently corrupt the template and every undo
 // snapshot would share objects with it. Always deep-clone on the way in.
-const cloneTemplate = (t: TopologyTemplate) => ({
-  nodes: structuredClone(t.nodes),
-  cables: structuredClone(t.cables),
-});
+//
+// The clone then gets its ports reconciled against its cables. All three shipped
+// templates declare cables but mark no ports at all, so without this the first
+// free ethernet port was handed out again for every new connection: on the SOHO
+// MikroTik, whose ether1/ether2 already had cables, a new device landed on
+// ether1 (WAN) instead of ether3 (Hotspot).
+const cloneTemplate = (t: TopologyTemplate) => {
+  const cables = structuredClone(t.cables);
+  return { nodes: reconcilePorts(structuredClone(t.nodes), cables), cables };
+};
 
 export default function App() {
   // Initial default: FTTH GPON Standard template.
@@ -136,8 +144,12 @@ export default function App() {
       showToast('⚠️ Format file JSON tidak sesuai dengan skema TERMINATOR.');
       return;
     }
-    setNodes(data.nodes);
-    setCables(data.cables);
+    // Same reconciliation as a template load: a .json saved before this existed
+    // carries cables with no port references, and would otherwise hand the same
+    // port to every new connection.
+    const importedCables = structuredClone(data.cables);
+    setNodes(reconcilePorts(structuredClone(data.nodes), importedCables));
+    setCables(importedCables);
     setSelectedNodeId(null);
     setSelectedCableId(null);
     setProbedNodeId(null);
@@ -200,6 +212,25 @@ export default function App() {
     const displayName = `${meta.name.split('(')[0].trim()} ${countSameType + 1}`;
     const slot = findFreeSlot(nodes.map((n) => ({ x: n.x, y: n.y })));
 
+    // Address for a device joining the existing LAN.
+    //
+    // The old code used `192.168.1.${100 + countSameType}`, and countSameType
+    // counts nodes of the *same type*: adding a PC and then a router produced
+    // two nodes on 192.168.1.100, a live IP conflict created by the app itself
+    // and reported as normal operation. The walk now looks at every address
+    // anyone holds, so the new device lands on the first genuinely free host.
+    //
+    // `router` and `server` used to get no `ipConfig` at all, which meant their
+    // cards showed no address and the conflict check had nothing to compare.
+    // A new router is modelled as an AP on the existing LAN -- static address,
+    // upstream as gateway, no DHCP server of its own -- which is exactly how the
+    // shipped SOHO template describes its router (192.168.88.2 via
+    // 192.168.88.1).
+    const lanGateway = primaryGateway(nodes);
+    const lanAddress = allocateStaticHost(lanGateway, nodes);
+    const lanSubnet = lanGateway?.ipConfig?.subnet || lanGateway?.ontConfig?.lanSubnet || '255.255.255.0';
+    const lanGatewayIp = gatewayAddressOf(lanGateway);
+
     const newNode: NetworkNode = {
       id: newId,
       type,
@@ -252,13 +283,16 @@ export default function App() {
           : undefined,
       htbRole: type === 'htb' ? (countSameType % 2 === 0 ? 'A' : 'B') : undefined,
       ipConfig:
-        ['pc', 'cctv', 'smartphone', 'iot'].includes(type)
+        ['pc', 'cctv', 'smartphone', 'iot', 'server', 'router'].includes(type)
           ? {
               mode: 'static',
-              ip: `192.168.1.${100 + countSameType}`,
-              subnet: '255.255.255.0',
-              gateway: '192.168.1.1',
+              ip: lanAddress ?? '192.168.1.100',
+              subnet: lanSubnet,
+              gateway: lanGatewayIp ?? '192.168.1.1',
               dns: '8.8.8.8',
+              // A router added to a running LAN is an AP on it, not a second
+              // DHCP server competing with the upstream one.
+              ...(type === 'router' ? { isDhcpServerEnabled: false } : {}),
             }
           : type === 'ont'
           ? {
@@ -315,15 +349,10 @@ export default function App() {
       return;
     }
 
-    // Required medium for selected cable
-    const requiredMedium: PortMedium =
-      cableType === 'feeder' || cableType === 'distribusi' || cableType === 'drop_core'
-        ? 'fiber'
-        : cableType === 'lan'
-        ? 'ethernet'
-        : cableType === 'coaxial'
-        ? 'coaxial'
-        : 'wireless';
+    // Required medium for selected cable. Shared with port reconciliation so
+    // the medium a port is claimed for and the medium reconciliation searches
+    // for cannot drift apart.
+    const requiredMedium: PortMedium = mediumForCable(cableType);
 
     // Claim a free port of the required medium, or synthesise a new one.
     // NOTE: never push onto `node.ports` here — that array is owned by React
@@ -333,10 +362,7 @@ export default function App() {
       const free = node.ports.find((p) => p.medium === requiredMedium && !p.connectedCableId);
       if (free) return { ...free };
       return {
-        id: `p-${node.id}-${Date.now().toString(36)}-${suffix}`,
-        name: `${requiredMedium.toUpperCase()} Port ${node.ports.length + 1}`,
-        medium: requiredMedium,
-        status: 'up',
+        ...synthesisePort(node, requiredMedium, `${Date.now().toString(36)}-${suffix}`),
       };
     };
 

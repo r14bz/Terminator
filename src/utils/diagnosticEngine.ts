@@ -1,6 +1,6 @@
 import type { NetworkNode, CableConnection, DiagnosticIssue } from '../types/network';
 import type { OpticalCalculationResult } from './opticalCalculator';
-import { isValidIpv4, isSameSubnet, findUpstreamGateway } from './ipUtils';
+import { isValidIpv4, isSameSubnet, findUpstreamGateway, addressOf } from './ipUtils';
 
 export function runNetworkDiagnostics(
   nodes: NetworkNode[],
@@ -135,16 +135,20 @@ export function runNetworkDiagnostics(
   }
 
   // Check 6: IP Conflicts (Duplikasi IP)
+  //
+  // Every powered-on node that holds a usable address, whatever its mode. This
+  // used to require `mode === 'static'`, which missed the case that actually
+  // reaches the user: a node in DHCP mode still stores the lease it was given
+  // (`ipConfig.ip`), so two of them on 192.168.88.115 collided in silence --
+  // the shipped templates do it too, and nothing warned.
   const ipMap = new Map<string, string[]>();
   for (const node of nodes) {
-    if (node.ipConfig?.ip && node.ipConfig.mode === 'static' && node.poweredOn) {
-      const ip = node.ipConfig.ip.trim();
-      if (ip && ip !== '0.0.0.0') {
-        const existing = ipMap.get(ip) || [];
-        existing.push(node.name);
-        ipMap.set(ip, existing);
-      }
-    }
+    if (!node.poweredOn) continue;
+    const ip = addressOf(node)?.trim();
+    if (!ip || ip === '0.0.0.0' || !isValidIpv4(ip)) continue;
+    const existing = ipMap.get(ip) || [];
+    existing.push(node.name);
+    ipMap.set(ip, existing);
   }
 
   for (const [ip, nodeNames] of ipMap.entries()) {
@@ -154,8 +158,8 @@ export function runNetworkDiagnostics(
         severity: 'critical',
         title: `Konflik Alamat IP: ${ip} Digunakan Oleh ${nodeNames.join(' & ')}`,
         category: 'ip',
-        cause: `Dua perangkat atau lebih memiliki alamat IP statis yang sama (${ip}) dalam jaringan. Ini menyebabkan tabrakan ARP (ARP spoofing / duplicate IP) dan memutuskan koneksi internet secara acak.`,
-        solution: `Buka pengaturan salah satu perangkat (${nodeNames.join(' atau ')}) dan ganti angka terakhir IP ke host yang belum terpakai, atau ubah mode menjadi "DHCP Client".`,
+        cause: `Dua perangkat atau lebih memiliki alamat IP yang sama (${ip}) dalam jaringan. Ini menyebabkan tabrakan ARP (ARP spoofing / duplicate IP) dan memutuskan koneksi internet secara acak.`,
+        solution: `Buka pengaturan salah satu perangkat (${nodeNames.join(' atau ')}) dan ganti angka terakhir IP ke host yang belum terpakai, atau ubah mode menjadi "DHCP Client" agar DHCP server memberikan alamat yang berbeda.`,
       });
     }
   }
