@@ -23,7 +23,8 @@
  *     deliberate edits in quick succession are one undo.
  */
 import assert from 'node:assert/strict';
-import { canRedo, canUndo, createHistory, pushSnapshot, redo, undo } from '../src/utils/historyCore.ts';
+import { readFileSync } from 'node:fs';
+import { canRedo, canUndo, createHistory, isSameSnapshot, pushSnapshot, redo, undo } from '../src/utils/historyCore.ts';
 
 let n = 0;
 const ok = (msg, cond) => {
@@ -41,9 +42,13 @@ const snap = (tag) => ({ nodes: [tag], cables: [] });
  * identity again does not.
  */
 function mount(initialTag) {
-  let nodes = [initialTag];
-  let cables = [];
-  let history = createHistory(snap(initialTag));
+  // One clone, shared: App seeds nodes, cables and the initial history snapshot
+  // from a single cloneTemplate() call, so the live state and `present` start
+  // out reference-equal. That identity is what the no-op guard relies on.
+  const initial = snap(initialTag);
+  let nodes = initial.nodes;
+  let cables = initial.cables;
+  let history = createHistory(initial);
   let isRestoring = false;
   let timer = null;
   const log = [];
@@ -62,9 +67,16 @@ function mount(initialTag) {
   const clock = (ms) => {
     if (timer === 'PENDING' && ms >= 500) {
       timer = null;
-      const tag = nodes[0];
-      history = pushSnapshot(history, snap(tag));
-      log.push(`push: ${tag}`);
+      // Memanggil fungsi yang sama dengan yang dipanggil App, bukan
+      // menulis ulang ceknya di sini. Kalau guard-nya ditulis ulang di
+      // test, test ini akan setuju dengan model apa pun yang dimodelkan --
+      // persis jebakan yang bikin test placement dulu buta.
+      if (isSameSnapshot(history, { nodes, cables })) {
+        log.push('push: dilewati (tidak ada perubahan)');
+        return;
+      }
+      history = pushSnapshot(history, { nodes, cables });
+      log.push('push: ' + nodes[0]);
     }
   };
 
@@ -81,6 +93,10 @@ function mount(initialTag) {
       runEffect();
     },
     tick: clock,
+    /** Efek mount. StrictMode menjalankannya dua kali di dev. */
+    mountRun() {
+      runEffect();
+    },
     undo() {
       if (!canUndo(history)) return false;
       isRestoring = true;
@@ -219,6 +235,87 @@ function mount(initialTag) {
   h.edit('d'); h.tick(1000);
   ok('edit baru membuang redo tail', h.future() === 0);
   ok('redo tidak bisa resurrect branch', h.redo() === false);
+}
+
+// --- 5. Mount must not record a step ---------------------------------------
+// This one was found by driving the running app, not by reading the code: 500ms
+// after every page load the pristine template was pushed into the history, so
+// undo lit up with an empty past. Clicking it restored the identical topology
+// and still reported "Perubahan diurungkan."
+//
+// The guard is a reference check, so it only works because nodes, cables and
+// the initial snapshot come from one shared clone. Both halves are pinned here:
+// a mount that records nothing, and a real edit straight after that still
+// records.
+{
+  const h = mount('template');
+  ok('mount: riwayat masih kosong', h.depth() === 0);
+  h.mountRun();
+  h.tick(1000);
+  ok('mount tidak mencatat langkah', h.depth() === 0);
+  ok('mount: undo tidak tersedia', h.undo() === false);
+
+  // StrictMode invokes mount effects twice in development. If the guard had
+  // been written as a plain "skip the first run" flag, the second run would
+  // schedule the push and the bug would survive in dev while appearing fixed in
+  // production. Reference equality is immune to that.
+  const d = mount('template');
+  d.mountRun();
+  d.mountRun();
+  d.tick(1000);
+  ok('StrictMode: mount ganda tidak mencatat langkah', d.depth() === 0);
+
+  d.edit('perubahan-pertama'); d.tick(1000);
+  ok('edit setelah mount tetap tercatat', d.depth() === 1 && d.present() === 'perubahan-pertama');
+  d.edit('perubahan-kedua'); d.tick(1000);
+  ok('edit kedua tercatat terpisah', d.depth() === 2);
+
+  ok('undo tersedia setelah edit nyata', d.undo() === true && d.present() === 'perubahan-pertama');
+  ok('kembali ke template lewat undo', d.undo() === true && d.present() === 'template');
+  ok('tidak ada langkah lebih', d.depth() === 0 && d.undo() === false);
+}
+
+// --- 6. A no-op update must not become a step ----------------------------
+// Handlers that map over the array produce a new identity even when the
+// contents are unchanged. The guard is deliberately identity-based, not a deep
+// compare, so this documents the chosen line rather than asserting it away.
+{
+  const h = mount('a');
+  h.edit('b'); h.tick(1000);
+  h.editNoop('b'); h.tick(1000);
+  ok('update dengan isi sama tapi identitas baru tetap jadi langkah', h.depth() === 2);
+}
+
+// --- 7. The shared-clone invariant in App.tsx -----------------------------
+// Everything above is a model, so it cannot see App.tsx at all: if the component
+// went back to seeding nodes, cables and the history from three separate
+// cloneTemplate() calls, isSameSnapshot would be false at mount and the phantom
+// step would come back, with every unit test still green. Only driving the
+// running app catches that.
+//
+// So the coupling is pinned at the source instead. This is a call-count
+// invariant with an exact expected value, not a "is this identifier used"
+// guess: one seeding clone. A second one reintroduces the bug.
+{
+  const src = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+
+  // Precisely one *seeding* clone. Not "one clone" overall: handleReset clones
+  // the template again on purpose, because a reset must produce a new array
+  // identity to count as an undo step. Asserting a bare call count got that
+  // wrong on the first attempt.
+  const seedClones = src.match(/useState\(\(\) => cloneTemplate/g) ?? [];
+  ok('App.tsx: tepat satu clone untuk seed keadaan awal', seedClones.length === 1, `ditemukan ${seedClones.length}`);
+
+  ok('App.tsx: keadaan awal dipakai bersama oleh nodes, cables dan history',
+    /useState<NetworkNode\[\]>\(initial\.nodes\)/.test(src) &&
+    /useState<CableConnection\[\]>\(initial\.cables\)/.test(src) &&
+    /createHistory\(\{ nodes: initial\.nodes, cables: initial\.cables \}\)/.test(src));
+
+  // A reset is a genuine edit, so it must not be routed through the memo.
+  ok('App.tsx: handleReset tetap membuat clone baru', /const fresh = cloneTemplate\(TOPOLOGY_TEMPLATES\[0\]\)/.test(src));
+
+  ok('App.tsx: pushSnapshot dijaga isSameSnapshot',
+    /isSameSnapshot\(h, \{ nodes, cables \}\) \? h : pushSnapshot\(h, \{ nodes, cables \}\)/.test(src));
 }
 
 console.log(`ok — ${n} assertions passed`);

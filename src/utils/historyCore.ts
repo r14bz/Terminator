@@ -60,3 +60,22 @@ export function redo(state: HistoryState): HistoryState {
 
 export const canUndo = (state: HistoryState): boolean => state.past.length > 0;
 export const canRedo = (state: HistoryState): boolean => state.future.length > 0;
+
+/**
+ * True when `next` is the very snapshot `state` is already showing.
+ *
+ * Identity, not value. Every handler that edits builds a new array, so a new
+ * identity genuinely is a new step, and re-comparing the contents of a whole
+ * topology on every 500ms tick would be wasted work. The case this exists for
+ * is startup: the live state and the initial snapshot are seeded from one
+ * shared clone, so recording that first tick would leave undo clickable with an
+ * empty past -- a click that restored the identical topology while reporting
+ * "Perubahan diurungkan."
+ *
+ * This lives here rather than inline in the effect so the wiring test and
+ * verify-history.mjs exercise the same function the app calls. A guard written
+ * only inside the component would be untestable in isolation, and a model test
+ * that reimplements it agrees with whatever the model says by construction.
+ */
+export const isSameSnapshot = (state: HistoryState, next: TopologySnapshot): boolean =>
+  state.present.nodes === next.nodes && state.present.cables === next.cables;

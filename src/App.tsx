@@ -23,7 +23,7 @@ import { planPing } from './utils/pingTool';
 import { findFreeSlot } from './utils/nodePlacement';
 import { zoomIn, zoomOut } from './utils/zoom';
 import type { HistoryState } from './utils/historyCore';
-import { canRedo as stackCanRedo, canUndo as stackCanUndo, createHistory, pushSnapshot, redo as stackRedo, undo as stackUndo } from './utils/historyCore';
+import { canRedo as stackCanRedo, canUndo as stackCanUndo, createHistory, isSameSnapshot, pushSnapshot, redo as stackRedo, undo as stackUndo } from './utils/historyCore';
 import { toPng } from 'html-to-image';
 
 // Templates are module-level singletons. Seeding state with them directly
@@ -36,9 +36,21 @@ const cloneTemplate = (t: TopologyTemplate) => ({
 });
 
 export default function App() {
-  // Initial default: FTTH GPON Standard template
-  const [nodes, setNodes] = useState<NetworkNode[]>(() => cloneTemplate(TOPOLOGY_TEMPLATES[0]).nodes);
-  const [cables, setCables] = useState<CableConnection[]>(() => cloneTemplate(TOPOLOGY_TEMPLATES[0]).cables);
+  // Initial default: FTTH GPON Standard template.
+  //
+  // One clone, shared between the live state and the initial history snapshot.
+  // This used to be three separate cloneTemplate() calls -- one for nodes, one
+  // for cables, one for the history -- so the initial snapshot could never be
+  // reference-equal to the state it was supposed to describe, and that is what
+  // produced a phantom undo step: 500ms after every page load the pristine
+  // template was pushed into the history, undo lit up with nothing to undo, and
+  // clicking it changed nothing while still toasting "Perubahan diurungkan."
+  // The reference guard in the history effect below depends on this shared
+  // identity, so it has to start from one clone.
+  const [initial] = useState(() => cloneTemplate(TOPOLOGY_TEMPLATES[0]));
+
+  const [nodes, setNodes] = useState<NetworkNode[]>(initial.nodes);
+  const [cables, setCables] = useState<CableConnection[]>(initial.cables);
 
   const canvasRef = useRef<CanvasHandle>(null);
 
@@ -50,7 +62,7 @@ export default function App() {
   // plain data in src/utils/historyCore.ts, which keeps the cursor and
   // truncation rules testable on their own.
   const [history, setHistory] = useState<HistoryState>(
-    () => createHistory(cloneTemplate(TOPOLOGY_TEMPLATES[0])),
+    () => createHistory({ nodes: initial.nodes, cables: initial.cables }),
   );
   const isRestoringRef = useRef(false);
   const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -62,7 +74,13 @@ export default function App() {
     }
     clearTimeout(historyDebounceRef.current);
     historyDebounceRef.current = setTimeout(() => {
-      setHistory((h) => pushSnapshot(h, { nodes, cables }));
+      // Nothing actually changed, so there is no step to record. Without this
+      // guard every page load pushed its own pristine template into the history
+      // half a second after mount: undo became clickable with an empty past, and
+      // the click restored the identical topology while still reporting
+      // success. isSameSnapshot lives in historyCore so the wiring test and the
+      // stack tests run the same predicate this does.
+      setHistory((h) => (isSameSnapshot(h, { nodes, cables }) ? h : pushSnapshot(h, { nodes, cables })));
     }, 500);
     return () => clearTimeout(historyDebounceRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps

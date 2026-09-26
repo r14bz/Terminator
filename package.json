@@ -16,6 +16,9 @@
     "test:history": "node --import ./scripts/ts-resolve.mjs scripts/verify-history.mjs",
     "test:history-wiring": "node --import ./scripts/ts-resolve.mjs scripts/verify-history-wiring.mjs",
     "test:placement": "node --import ./scripts/ts-resolve.mjs scripts/verify-placement.mjs",
+    "test:mutation": "bash scripts/mutate-placement.sh && bash scripts/mutate-history.sh",
+    "test:mutation:placement": "bash scripts/mutate-placement.sh",
+    "test:mutation:history": "bash scripts/mutate-history.sh",
     "test:zoom": "node --import ./scripts/ts-resolve.mjs scripts/verify-zoom.mjs",
     "test:internet-map": "node --import ./scripts/ts-resolve.mjs scripts/verify-internet-map.mjs",
     "test:internet-access": "node --import ./scripts/ts-resolve.mjs scripts/verify-internet-access.mjs"

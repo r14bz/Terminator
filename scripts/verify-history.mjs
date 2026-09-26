@@ -15,7 +15,7 @@
  */
 import assert from 'node:assert/strict';
 import {
-  canRedo, canUndo, createHistory, pushSnapshot, redo, undo,
+  canRedo, canUndo, createHistory, isSameSnapshot, pushSnapshot, redo, undo,
 } from '../src/utils/historyCore.ts';
 
 let n = 0;
@@ -126,6 +126,44 @@ const snap = (label) => ({ nodes: [label], cables: [] });
   h = pushSnapshot(h, { nodes: ['n1'], cables: ['c1'] });
   h = undo(h);
   ok('undo memulihkan cables juga', h.present.cables[0] === 'c0' && h.present.nodes[0] === 'n0');
+}
+
+// --- isSameSnapshot: identity, deliberately ------------------------------
+// The predicate that stops a phantom undo step being recorded at startup. It
+// compares identity rather than value on purpose, and these assertions pin
+// that choice so a later "let's just deep-equal it" rewrite has to be a
+// deliberate change rather than an accident.
+//
+// Why it exists: App seeds nodes, cables and the initial history snapshot from
+// one shared clone, so half a second after mount the effect fired and pushed
+// that pristine template into the history. Undo lit up with an empty past, and
+// clicking it restored an identical topology while toasting "Perubahan
+// diurungkan." Found by driving the running app, not by reading the code.
+{
+  const initial = { nodes: ['n0'], cables: ['c0'] };
+  const h = createHistory(initial);
+
+  ok('awal: snapshot yang sama dikenali', isSameSnapshot(h, { nodes: initial.nodes, cables: initial.cables }));
+  ok('nodes sama tapi cables lain -> bukan', isSameSnapshot(h, { nodes: initial.nodes, cables: ['c1'] }) === false);
+  ok('cables sama tapi nodes lain -> bukan', isSameSnapshot(h, { nodes: ['n1'], cables: initial.cables }) === false);
+  ok('keduanya lain -> bukan', isSameSnapshot(h, { nodes: ['n1'], cables: ['c1'] }) === false);
+
+  // Value-equal but freshly allocated: reported as a change, because every
+  // handler that edits builds new arrays and re-walking a whole topology on
+  // each 500ms tick would buy nothing.
+  ok('isi sama tapi identitas baru -> dianggap berubah', isSameSnapshot(h, { nodes: ['n0'], cables: ['c0'] }) === false);
+
+  // The restore case: after undo, `present` is the snapshot that was popped.
+  let after = pushSnapshot(h, { nodes: ['n1'], cables: ['c1'] });
+  after = undo(after);
+  ok('undo: present kembali ke identitas awal', after.present === initial);
+  ok('undo: keadaan awal tidak terhitung dua kali', isSameSnapshot(after, { nodes: initial.nodes, cables: initial.cables }));
+
+  // And the guard actually keeps the stack empty when the app obeys it.
+  const guarded = isSameSnapshot(h, { nodes: h.present.nodes, cables: h.present.cables })
+    ? h
+    : pushSnapshot(h, { nodes: h.present.nodes, cables: h.present.cables });
+  ok('guard mencegah langkah pada keadaan awal', canUndo(guarded) === false);
 }
 
 console.log(`ok — ${n} assertions passed`);
