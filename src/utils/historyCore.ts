@@ -60,7 +60,3 @@ export function redo(state: HistoryState): HistoryState {
 
 export const canUndo = (state: HistoryState): boolean => state.past.length > 0;
 export const canRedo = (state: HistoryState): boolean => state.future.length > 0;
-
-/** Snapshot identity is by value, not by reference: callers pass fresh literals. */
-export const sameSnapshot = (a: TopologySnapshot, b: TopologySnapshot): boolean =>
-  a === b || (a.nodes === b.nodes && a.cables === b.cables);

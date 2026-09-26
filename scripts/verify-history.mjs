@@ -15,7 +15,7 @@
  */
 import assert from 'node:assert/strict';
 import {
-  canRedo, canUndo, createHistory, pushSnapshot, redo, sameSnapshot, undo,
+  canRedo, canUndo, createHistory, pushSnapshot, redo, undo,
 } from '../src/utils/historyCore.ts';
 
 let n = 0;
@@ -118,15 +118,6 @@ const snap = (label) => ({ nodes: [label], cables: [] });
   ok('dua push = dua langkah undo', h.past.length === 2);
   ok('undo tetap idempoten walau isinya sama', undo(undo(h)).present === a);
   ok('tidak ada langkah yang hilang', canUndo(undo(undo(h))) === false);
-}
-
-// --- sameSnapshot helper ---------------------------------------------------
-{
-  const s = snap('a');
-  ok('sama reference -> true', sameSnapshot(s, s));
-  ok('beda isi -> false', sameSnapshot(s, snap('a')) === false);
-  const t = { nodes: ['a'], cables: [] };
-  ok('struktur sama tapi reference beda -> false', sameSnapshot(s, t) === false);
 }
 
 // --- Nodes and cables travel together -------------------------------------
