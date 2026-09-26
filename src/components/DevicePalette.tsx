@@ -16,11 +16,11 @@ import {
   ChevronUp,
   Plus,
 } from 'lucide-react';
-import { DeviceType, DeviceCategory } from '../types/network';
+import { NodeType, DeviceCategory } from '../types/network';
 import { DEVICE_METADATA } from '../data/deviceDefinitions';
 
 interface DevicePaletteProps {
-  onAddDevice: (type: DeviceType) => void;
+  onAddDevice: (type: NodeType) => void;
 }
 
 const CATEGORY_TABS: Array<{ id: DeviceCategory; label: string }> = [
@@ -33,9 +33,9 @@ const CATEGORY_TABS: Array<{ id: DeviceCategory; label: string }> = [
 export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice }) => {
   const [activeTab, setActiveTab] = useState<DeviceCategory>('ftth');
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [hoveredDevice, setHoveredDevice] = useState<DeviceType | null>(null);
+  const [hoveredDevice, setHoveredDevice] = useState<NodeType | null>(null);
 
-  const getDeviceIcon = (type: DeviceType) => {
+  const getDeviceIcon = (type: NodeType) => {
     switch (type) {
       case 'internet':
         return <Globe className="h-4 w-4 text-sky-600" />;

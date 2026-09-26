@@ -1,7 +1,7 @@
-import { CableType } from '../types/network';
+import { NodeCableType } from '../types/network';
 
 export interface CableMetadata {
-  type: CableType;
+  type: NodeCableType;
   name: string;
   category: 'fiber' | 'copper' | 'wireless';
   shortDesc: string;
@@ -13,7 +13,7 @@ export interface CableMetadata {
   technicianTips: string[];
 }
 
-export const CABLE_METADATA: Record<CableType, CableMetadata> = {
+export const CABLE_METADATA: Record<NodeCableType, CableMetadata> = {
   feeder: {
     type: 'feeder',
     name: 'Kabel Optik Feeder',

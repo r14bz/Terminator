@@ -11,7 +11,7 @@ import { OPMFloatingTool } from './components/OPMFloatingTool';
 import { GlossaryModal } from './components/GlossaryModal';
 import { TemplateModal } from './components/TemplateModal';
 
-import { NetworkNode, CableConnection, CableType, DeviceType, ActiveTool } from './types/network';
+import { NetworkNode, CableConnection, NodeCableType, NodeType, ActiveTool, DevicePort, PortMedium } from './types/network';
 import { TOPOLOGY_TEMPLATES, TopologyTemplate } from './data/templates';
 import { DEVICE_METADATA } from './data/deviceDefinitions';
 import { DEVICE_BRANDS } from './data/deviceBrands';
@@ -19,10 +19,19 @@ import { calculateOpticalPowers } from './utils/opticalCalculator';
 import { runNetworkDiagnostics } from './utils/diagnosticEngine';
 import { toPng } from 'html-to-image';
 
+// Templates are module-level singletons. Seeding state with them directly
+// would alias the same node/cable objects, so any in-place mutation (e.g.
+// auto-created ports) would permanently corrupt the template and every undo
+// snapshot would share objects with it. Always deep-clone on the way in.
+const cloneTemplate = (t: TopologyTemplate) => ({
+  nodes: structuredClone(t.nodes),
+  cables: structuredClone(t.cables),
+});
+
 export default function App() {
   // Initial default: FTTH GPON Standard template
-  const [nodes, setNodes] = useState<NetworkNode[]>(() => TOPOLOGY_TEMPLATES[0].nodes);
-  const [cables, setCables] = useState<CableConnection[]>(() => TOPOLOGY_TEMPLATES[0].cables);
+  const [nodes, setNodes] = useState<NetworkNode[]>(() => cloneTemplate(TOPOLOGY_TEMPLATES[0]).nodes);
+  const [cables, setCables] = useState<CableConnection[]>(() => cloneTemplate(TOPOLOGY_TEMPLATES[0]).cables);
 
   const canvasRef = useRef<CanvasHandle>(null);
 
@@ -34,11 +43,11 @@ export default function App() {
   // state) since it's written on every change; a small counter forces a
   // re-render so the Undo/Redo buttons' disabled state stays accurate.
   const historyRef = useRef<{ nodes: NetworkNode[]; cables: CableConnection[] }[]>([
-    { nodes: TOPOLOGY_TEMPLATES[0].nodes, cables: TOPOLOGY_TEMPLATES[0].cables },
+    cloneTemplate(TOPOLOGY_TEMPLATES[0]),
   ]);
   const historyIndexRef = useRef(0);
   const isRestoringRef = useRef(false);
-  const historyDebounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [historyTick, setHistoryTick] = useState(0);
 
   useEffect(() => {
@@ -99,7 +108,9 @@ export default function App() {
     a.href = url;
     a.download = `Terminator_Topologi_${dateStr}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    // Revoking synchronously can cancel the download in some browsers; give
+    // the browser a tick to pick up the blob first.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
     showToast('✓ Topologi berhasil disimpan sebagai file .json');
   };
 
@@ -119,7 +130,7 @@ export default function App() {
 
   const [isRunning, setIsRunning] = useState<boolean>(true);
   const [activeTool, setActiveTool] = useState<ActiveTool>('select');
-  const [selectedCableType, setSelectedCableType] = useState<CableType>('drop_core');
+  const [selectedCableType, setSelectedCableType] = useState<NodeCableType>('drop_core');
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedCableId, setSelectedCableId] = useState<string | null>(null);
@@ -137,11 +148,17 @@ export default function App() {
 
   // Toast notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Kept in a ref so a rapid second toast cancels the first one's timer —
+  // otherwise the older timeout clears the newer message early.
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 3500);
   };
+
+  useEffect(() => () => clearTimeout(toastTimerRef.current), []);
 
   // Optical Calculations (Power budget & attenuation)
   const opticalResults = useMemo(() => {
@@ -154,7 +171,7 @@ export default function App() {
   }, [nodes, cables, opticalResults]);
 
   // Add new device to canvas
-  const handleAddDevice = (type: DeviceType) => {
+  const handleAddDevice = (type: NodeType) => {
     const meta = DEVICE_METADATA[type];
     const newId = `node-${type}-${Date.now().toString(36)}`;
     const countSameType = nodes.filter((n) => n.type === type).length;
@@ -259,7 +276,7 @@ export default function App() {
   };
 
   // Connect nodes via selected cable type
-  const handleConnectNodes = (fromNodeId: string, toNodeId: string, cableType: CableType) => {
+  const handleConnectNodes = (fromNodeId: string, toNodeId: string, cableType: NodeCableType) => {
     const fromNode = nodes.find((n) => n.id === fromNodeId);
     const toNode = nodes.find((n) => n.id === toNodeId);
     if (!fromNode || !toNode) return;
@@ -276,7 +293,7 @@ export default function App() {
     }
 
     // Required medium for selected cable
-    const requiredMedium =
+    const requiredMedium: PortMedium =
       cableType === 'feeder' || cableType === 'distribusi' || cableType === 'drop_core'
         ? 'fiber'
         : cableType === 'lan'
@@ -285,30 +302,23 @@ export default function App() {
         ? 'coaxial'
         : 'wireless';
 
-    // Find available port on fromNode
-    let fromPort = fromNode.ports.find((p) => p.medium === requiredMedium && !p.connectedCableId);
-    if (!fromPort) {
-      // Auto create new compatible port for ease of learning
-      fromPort = {
-        id: `p-${fromNode.id}-${Date.now()}-a`,
-        name: `${requiredMedium.toUpperCase()} Port`,
+    // Claim a free port of the required medium, or synthesise a new one.
+    // NOTE: never push onto `node.ports` here — that array is owned by React
+    // state (and by the undo snapshots). The returned port is attached to the
+    // node immutably further down, once the cable id exists.
+    const claimPort = (node: NetworkNode, suffix: 'a' | 'b'): DevicePort => {
+      const free = node.ports.find((p) => p.medium === requiredMedium && !p.connectedCableId);
+      if (free) return { ...free };
+      return {
+        id: `p-${node.id}-${Date.now().toString(36)}-${suffix}`,
+        name: `${requiredMedium.toUpperCase()} Port ${node.ports.length + 1}`,
         medium: requiredMedium,
         status: 'up',
       };
-      fromNode.ports.push(fromPort);
-    }
+    };
 
-    // Find available port on toNode
-    let toPort = toNode.ports.find((p) => p.medium === requiredMedium && !p.connectedCableId);
-    if (!toPort) {
-      toPort = {
-        id: `p-${toNode.id}-${Date.now()}-b`,
-        name: `${requiredMedium.toUpperCase()} Port`,
-        medium: requiredMedium,
-        status: 'up',
-      };
-      toNode.ports.push(toPort);
-    }
+    const fromPort = claimPort(fromNode, 'a');
+    const toPort = claimPort(toNode, 'b');
 
     // Calculate approximate physical distance in km
     const dx = Math.abs(fromNode.x - toNode.x);
@@ -333,9 +343,38 @@ export default function App() {
       status: 'active',
     };
 
+    // Attach the claimed ports immutably and record the back-reference so
+    // `claimPort` can tell occupied ports from free ones on the next cable.
+    const attachPort = (node: NetworkNode, port: typeof fromPort) => {
+      const exists = node.ports.some((p) => p.id === port.id);
+      const ports = exists
+        ? node.ports.map((p) => (p.id === port.id ? { ...p, connectedCableId: newCable.id } : p))
+        : [...node.ports, { ...port, connectedCableId: newCable.id }];
+      return { ...node, ports };
+    };
+
+    setNodes((prev) =>
+      prev.map((n) =>
+        n.id === fromNodeId ? attachPort(n, fromPort) : n.id === toNodeId ? attachPort(n, toPort) : n
+      )
+    );
     setCables((prev) => [...prev, newCable]);
     showToast(`Kabel ${cableType.toUpperCase()} berhasil menghubungkan ${fromNode.name} ke ${toNode.name}.`);
   };
+
+  // Release every port back-reference held by the given cables.
+  const releasePortsOf = (prev: NetworkNode[], cableIds: Set<string>) =>
+    prev.map((n) => {
+      if (!n.ports.some((p) => p.connectedCableId && cableIds.has(p.connectedCableId))) return n;
+      return {
+        ...n,
+        ports: n.ports.map((p) =>
+          p.connectedCableId && cableIds.has(p.connectedCableId)
+            ? { ...p, connectedCableId: undefined }
+            : p
+        ),
+      };
+    });
 
   // Node position update
   const handleUpdateNodePosition = (nodeId: string, x: number, y: number) => {
@@ -351,7 +390,10 @@ export default function App() {
 
   // Delete node
   const handleDeleteNode = (nodeId: string) => {
-    setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+    const orphanedCableIds = new Set(
+      cables.filter((c) => c.fromNodeId === nodeId || c.toNodeId === nodeId).map((c) => c.id)
+    );
+    setNodes((prev) => releasePortsOf(prev.filter((n) => n.id !== nodeId), orphanedCableIds));
     setCables((prev) =>
       prev.filter((c) => c.fromNodeId !== nodeId && c.toNodeId !== nodeId)
     );
@@ -362,6 +404,7 @@ export default function App() {
 
   // Delete cable
   const handleDeleteCable = (cableId: string) => {
+    setNodes((prev) => releasePortsOf(prev, new Set([cableId])));
     setCables((prev) => prev.filter((c) => c.id !== cableId));
     if (selectedCableId === cableId) setSelectedCableId(null);
     showToast('Kabel telah dihapus dari topologi.');
@@ -394,8 +437,9 @@ export default function App() {
   // Reset or clear canvas
   const handleReset = () => {
     if (confirm('Apakah Anda ingin mengembalikan topologi ke template awal FTTH GPON?')) {
-      setNodes(TOPOLOGY_TEMPLATES[0].nodes);
-      setCables(TOPOLOGY_TEMPLATES[0].cables);
+      const fresh = cloneTemplate(TOPOLOGY_TEMPLATES[0]);
+      setNodes(fresh.nodes);
+      setCables(fresh.cables);
       setSelectedNodeId(null);
       setSelectedCableId(null);
       setProbedNodeId(null);
@@ -593,8 +637,9 @@ export default function App() {
         isOpen={isTemplateOpen}
         onClose={() => setIsTemplateOpen(false)}
         onSelectTemplate={(template: TopologyTemplate) => {
-          setNodes(template.nodes);
-          setCables(template.cables);
+          const fresh = cloneTemplate(template);
+          setNodes(fresh.nodes);
+          setCables(fresh.cables);
           setSelectedNodeId(null);
           setSelectedCableId(null);
           setProbedNodeId(null);

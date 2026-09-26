@@ -21,7 +21,7 @@ import {
   Grid,
   Tag,
 } from 'lucide-react';
-import { NetworkNode, CableConnection, CableType, SimulationPacket, ActiveTool, DiagnosticIssue } from '../types/network';
+import { NetworkNode, CableConnection, NodeCableType, SimulationPacket, ActiveTool, DiagnosticIssue } from '../types/network';
 import { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { CABLE_METADATA } from '../data/cableDefinitions';
 import { checkInternetAccess } from '../utils/ipUtils';
@@ -34,8 +34,8 @@ interface CanvasProps {
   onSelectNode: (nodeId: string | null) => void;
   onUpdateNodePosition: (nodeId: string, x: number, y: number) => void;
   activeTool: ActiveTool;
-  selectedCableType: CableType;
-  onConnectNodes: (fromNodeId: string, toNodeId: string, cableType: CableType) => void;
+  selectedCableType: NodeCableType;
+  onConnectNodes: (fromNodeId: string, toNodeId: string, cableType: NodeCableType) => void;
   onSelectCable: (cableId: string) => void;
   selectedCableId: string | null;
   onDeleteCable: (cableId: string) => void;

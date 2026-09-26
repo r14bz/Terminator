@@ -1,6 +1,6 @@
-import { DeviceMetadata, DeviceType } from '../types/network';
+import { DeviceMetadata, NodeType } from '../types/network';
 
-export const DEVICE_METADATA: Record<DeviceType, DeviceMetadata> = {
+export const DEVICE_METADATA: Record<NodeType, DeviceMetadata> = {
   internet: {
     type: 'internet',
     name: 'Internet / Cloud WAN',

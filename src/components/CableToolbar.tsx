@@ -12,14 +12,14 @@ import {
   Trash2,
   HelpCircle,
 } from 'lucide-react';
-import { CableType, ActiveTool } from '../types/network';
+import { NodeCableType, ActiveTool } from '../types/network';
 import { CABLE_METADATA } from '../data/cableDefinitions';
 
 interface CableToolbarProps {
   activeTool: ActiveTool;
   setActiveTool: (tool: ActiveTool) => void;
-  selectedCableType: CableType;
-  setSelectedCableType: (type: CableType) => void;
+  selectedCableType: NodeCableType;
+  setSelectedCableType: (type: NodeCableType) => void;
   zoomLevel: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -161,7 +161,7 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
           <span className="text-[11px] font-medium text-slate-500 hidden sm:inline">
             Tipe Kabel:
           </span>
-          {(Object.keys(CABLE_METADATA) as CableType[]).map((cableKey) => {
+          {(Object.keys(CABLE_METADATA) as NodeCableType[]).map((cableKey) => {
             const meta = CABLE_METADATA[cableKey];
             const isSelected = selectedCableType === cableKey;
             return (

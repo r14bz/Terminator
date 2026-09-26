@@ -271,7 +271,8 @@ export function downloadTopologyPng(
   const scale = options.scale || 2; // Default 2x for sharp retina graphics
 
   const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-  const URLObj = window.URL || window.webkitURL || window;
+  const URLObj: typeof URL =
+    window.URL || (window as unknown as { webkitURL?: typeof URL }).webkitURL || window.URL;
   const svgUrl = URLObj.createObjectURL(svgBlob);
 
   const img = new Image();
