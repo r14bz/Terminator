@@ -1,32 +1,71 @@
-import { NetworkNode, CableConnection } from '../types/network';
+import type { NetworkNode, CableConnection } from '../types/network';
 
 /**
- * Validates IPv4 address string (e.g. 192.168.1.1)
+ * Single source of truth for IPv4 validation.
+ *
+ * This used to be duplicated in `ipCalculator.ts` with a laxer rule that
+ * accepted leading zeros ("010.1.1.1"), so the same address could validate in
+ * one feature and fail in another. The strict rule below is now canonical:
+ * every octet must be a bare decimal integer with no padding, sign, exponent
+ * or whitespace, which is what RFC 3986 dec-octet and every real parser expect.
+ *
+ * Defensive against non-string input on purpose: topology JSON is imported
+ * through an `any`-typed handler, so `ip: 12345` must return false rather than
+ * throw on `.trim()`.
  */
-export function isValidIpv4(ip: string): boolean {
-  if (!ip) return false;
+export function isValidIpv4(ip: unknown): ip is string {
+  if (typeof ip !== 'string') return false;
   const parts = ip.trim().split('.');
   if (parts.length !== 4) return false;
   return parts.every((p) => {
+    if (p.length === 0 || p.length > 3) return false;
+    if (!/^\d+$/.test(p)) return false; // rejects '+1', '1e2', ' 1', '-0'
+    // Reject leading zeros outright: "010" must never silently mean 10, since
+    // that ambiguity is exactly what made the old duplicate disagree.
+    if (p.length > 1 && p[0] === '0') return false;
     const n = Number(p);
-    return !isNaN(n) && n >= 0 && n <= 255 && p === String(n);
+    return n >= 0 && n <= 255;
   });
 }
 
 /**
- * Convert IPv4 string to 32-bit unsigned integer
+ * Convert IPv4 string to 32-bit unsigned integer.
+ * Returns 0 for anything `isValidIpv4` rejects, so callers never propagate NaN.
  */
 export function ipToNumber(ip: string): number {
-  return (
-    ip
-      .trim()
-      .split('.')
-      .reduce((acc, octet) => ((acc << 8) + parseInt(octet, 10)) >>> 0, 0) >>> 0
-  );
+  if (!isValidIpv4(ip)) return 0;
+  return ip
+    .trim()
+    .split('.')
+    .reduce((acc, octet) => ((acc << 8) + parseInt(octet, 10)) >>> 0, 0) >>> 0;
 }
 
 /**
- * Checks if two IP addresses are in the same subnet given a subnet mask
+ * Number of leading 1 bits in a dotted-quad mask. Only meaningful for
+ * contiguous masks; returns 0 for a non-contiguous mask such as 255.0.255.0
+ * rather than silently reporting a wrong prefix length.
+ */
+export function maskToPrefixLength(mask: string): number {
+  if (!isValidIpv4(mask)) return 0;
+  const int = ipToNumber(mask);
+  // A contiguous mask leaves host bits of the form 2^k - 1, which is exactly
+  // the numbers z where (z & (z + 1)) === 0. A mask like 255.0.255.0 has
+  // z = 0x00FF00FF and fails this, so it is rejected instead of masquerading
+  // as the /8 its leading 1-bits would suggest.
+  const hostBits = ~int >>> 0;
+  if ((hostBits & (hostBits + 1)) !== 0) return 0;
+  let bits = 0;
+  for (let i = 31; i >= 0; i--) {
+    if ((int & (1 << i)) !== 0) bits++;
+  }
+  return bits;
+}
+
+/**
+ * Checks if two IP addresses are in the same subnet given a subnet mask.
+ *
+ * `&` coerces to int32, but both operands wrap identically so the low 32 bits
+ * — the only ones that matter — compare correctly even for 192.x addresses.
  */
 export function isSameSubnet(ip1: string, ip2: string, mask: string = '255.255.255.0'): boolean {
   if (!isValidIpv4(ip1) || !isValidIpv4(ip2) || !isValidIpv4(mask)) return false;
