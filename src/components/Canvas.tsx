@@ -4,6 +4,8 @@ import { NetworkNode, CableConnection, NodeCableType, SimulationPacket, ActiveTo
 import { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { CABLE_METADATA } from '../data/cableDefinitions';
 import { checkInternetAccess } from '../utils/ipUtils';
+import { boundsOf, clampZoom, computeFitView } from '../utils/zoom';
+import { CARD_MIN_HEIGHT, CARD_WIDTH } from '../utils/nodePlacement';
 
 interface CanvasProps {
   nodes: NetworkNode[];
@@ -72,30 +74,16 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
       setPan({ x: 0, y: 0 });
       return;
     }
-    const xs = nodes.map((n) => n.x);
-    const ys = nodes.map((n) => n.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-
-    const padding = 120;
-    const contentWidth = maxX - minX + padding * 2;
-    const contentHeight = maxY - minY + padding * 2;
-
-    const containerWidth = containerRef.current?.clientWidth || 1000;
-    const containerHeight = containerRef.current?.clientHeight || 700;
-
-    const newZoom = Math.min(
-      Math.min(containerWidth / contentWidth, containerHeight / contentHeight),
-      1.4,
-    );
-    const clampedZoom = Math.min(2.0, Math.max(0.5, Number(newZoom.toFixed(2))));
-    onSetZoomLevel(clampedZoom);
-    setPan({
-      x: (containerWidth - contentWidth * clampedZoom) / 2 - minX * clampedZoom + padding * clampedZoom,
-      y: (containerHeight - contentHeight * clampedZoom) / 2 - minY * clampedZoom + padding * clampedZoom,
+    const box = boundsOf(nodes.map((n) => ({ x: n.x, y: n.y })), {
+      width: CARD_WIDTH,
+      height: CARD_MIN_HEIGHT,
     });
+    const view = computeFitView(box, {
+      width: containerRef.current?.clientWidth || 1000,
+      height: containerRef.current?.clientHeight || 700,
+    });
+    onSetZoomLevel(view.zoom);
+    setPan(view.pan);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes]);
 
@@ -234,8 +222,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
       if (e.ctrlKey || e.metaKey) {
         // Trackpad Pinch / Ctrl + MouseWheel -> Controlled gentle zoom
         const factor = e.deltaY < 0 ? 1.05 : 0.95;
-        const newZoom = Math.min(2.5, Math.max(0.4, Number((zoomLevel * factor).toFixed(2))));
-        onSetZoomLevel(newZoom);
+        onSetZoomLevel(clampZoom(zoomLevel * factor));
       } else {
         // Standard Mouse Wheel / 2-finger swipe -> PAN canvas smoothly (NEVER ZOOM!)
         setPan((prev) => ({
@@ -346,8 +333,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
       // Minimum movement threshold
       if (Math.abs(delta) > 3) {
         const factor = delta > 0 ? 1.025 : 0.975;
-        const newZoom = Math.min(2.5, Math.max(0.4, Number((zoomLevel * factor).toFixed(2))));
-        onSetZoomLevel(newZoom);
+        onSetZoomLevel(clampZoom(zoomLevel * factor));
         touchDistRef.current = currentDist;
       }
     } else if (e.touches.length === 1 && !isPinchingRef.current) {

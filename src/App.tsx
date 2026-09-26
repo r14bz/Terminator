@@ -19,6 +19,7 @@ import { calculateOpticalPowers } from './utils/opticalCalculator';
 import { runNetworkDiagnostics } from './utils/diagnosticEngine';
 import { planPing } from './utils/pingTool';
 import { findFreeSlot } from './utils/nodePlacement';
+import { zoomIn, zoomOut } from './utils/zoom';
 import type { HistoryState } from './utils/historyCore';
 import { canRedo as stackCanRedo, canUndo as stackCanUndo, createHistory, pushSnapshot, redo as stackRedo, undo as stackUndo } from './utils/historyCore';
 import { toPng } from 'html-to-image';
@@ -518,8 +519,8 @@ export default function App() {
         selectedCableType={selectedCableType}
         setSelectedCableType={setSelectedCableType}
         zoomLevel={zoomLevel}
-        onZoomIn={() => setZoomLevel((z) => Math.min(2.0, Number((z + 0.15).toFixed(2))))}
-        onZoomOut={() => setZoomLevel((z) => Math.max(0.5, Number((z - 0.15).toFixed(2))))}
+        onZoomIn={() => setZoomLevel(zoomIn)}
+        onZoomOut={() => setZoomLevel(zoomOut)}
         onResetZoom={() => setZoomLevel(1.0)}
         connectingSourceNodeName={connectingSourceNode?.name}
         onCancelConnection={() => setConnectingSourceNodeId(null)}
