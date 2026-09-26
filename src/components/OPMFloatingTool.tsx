@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, CheckCircle2, AlertTriangle } from 'lucide-react';
-import { OpticalCalculationResult } from '../utils/opticalCalculator';
-import { NetworkNode } from '../types/network';
+import type { OpticalCalculationResult } from '../utils/opticalCalculator';
+import type { NetworkNode } from '../types/network';
 
 interface OPMFloatingToolProps {
   probedNode: NetworkNode | null;

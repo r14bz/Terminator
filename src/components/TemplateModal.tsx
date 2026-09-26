@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, FolderOpen, ArrowRight } from 'lucide-react';
-import { TOPOLOGY_TEMPLATES, TopologyTemplate } from '../data/templates';
+import type { TopologyTemplate } from '../data/templates';
+import { TOPOLOGY_TEMPLATES } from '../data/templates';
 
 interface TemplateModalProps {
   isOpen: boolean;

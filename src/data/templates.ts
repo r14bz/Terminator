@@ -1,4 +1,4 @@
-import { NetworkNode, CableConnection } from '../types/network';
+import type { NetworkNode, CableConnection } from '../types/network';
 
 export interface TopologyTemplate {
   id: string;

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { X, Power, Trash2, Terminal, Activity, CheckCircle2, AlertTriangle, Info, Server, Sliders, ShieldCheck, Globe, Wifi, Lock, Tag, Gauge, Video } from 'lucide-react';
-import { NetworkNode, CableConnection } from '../types/network';
+import type { NetworkNode, CableConnection } from '../types/network';
 import { DEVICE_METADATA } from '../data/deviceDefinitions';
 import { DEVICE_BRANDS } from '../data/deviceBrands';
-import { OpticalCalculationResult } from '../utils/opticalCalculator';
+import type { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { findUpstreamGateway, isSameSubnet, isValidIpv4, checkInternetAccess } from '../utils/ipUtils';
 
 interface NodeInspectorProps {

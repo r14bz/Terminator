@@ -13,7 +13,7 @@ import {
   Download,
   Upload,
 } from 'lucide-react';
-import { DiagnosticIssue, ActiveTool } from '../types/network';
+import type { DiagnosticIssue, ActiveTool } from '../types/network';
 
 interface NavbarProps {
   isRunning: boolean;

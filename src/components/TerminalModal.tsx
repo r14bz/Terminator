@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Terminal as TerminalIcon, CornerDownLeft, Trash2 } from 'lucide-react';
-import { NetworkNode } from '../types/network';
+import type { NetworkNode } from '../types/network';
 import { findNodeByAddress, isSameSubnet, isValidIpv4 } from '../utils/ipUtils';
 
 type TerminalLine = { text: string; type: 'cmd' | 'output' | 'error' };

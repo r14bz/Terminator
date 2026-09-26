@@ -1,4 +1,4 @@
-import { DeviceMetadata, NodeType } from '../types/network';
+import type { DeviceMetadata, NodeType } from '../types/network';
 
 export const DEVICE_METADATA: Record<NodeType, DeviceMetadata> = {
   internet: {

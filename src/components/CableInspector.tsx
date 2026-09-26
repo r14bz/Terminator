@@ -1,6 +1,6 @@
 import React from 'react';
 import { X, Trash2, Scissors, ArrowRight, Cable as CableIcon } from 'lucide-react';
-import { CableConnection, NetworkNode } from '../types/network';
+import type { CableConnection, NetworkNode } from '../types/network';
 import { CABLE_METADATA } from '../data/cableDefinitions';
 
 interface CableInspectorProps {

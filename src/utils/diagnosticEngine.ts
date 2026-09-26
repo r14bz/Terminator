@@ -1,5 +1,5 @@
-import { NetworkNode, CableConnection, DiagnosticIssue } from '../types/network';
-import { OpticalCalculationResult } from './opticalCalculator';
+import type { NetworkNode, CableConnection, DiagnosticIssue } from '../types/network';
+import type { OpticalCalculationResult } from './opticalCalculator';
 import { isValidIpv4, isSameSubnet, findUpstreamGateway } from './ipUtils';
 
 export function runNetworkDiagnostics(

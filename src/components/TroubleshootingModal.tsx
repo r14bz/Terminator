@@ -9,7 +9,7 @@ import {
   HelpCircle,
   Lightbulb,
 } from 'lucide-react';
-import { DiagnosticIssue } from '../types/network';
+import type { DiagnosticIssue } from '../types/network';
 
 interface TroubleshootingModalProps {
   isOpen: boolean;

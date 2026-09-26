@@ -1,6 +1,6 @@
 import React from 'react';
 import { MousePointer, Move, Hand, Cable, Activity, Send, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
-import { NodeCableType, ActiveTool } from '../types/network';
+import type { NodeCableType, ActiveTool } from '../types/network';
 import { CABLE_METADATA } from '../data/cableDefinitions';
 
 interface CableToolbarProps {

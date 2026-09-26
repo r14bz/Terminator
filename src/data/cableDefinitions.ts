@@ -1,4 +1,4 @@
-import { NodeCableType } from '../types/network';
+import type { NodeCableType } from '../types/network';
 
 export interface CableMetadata {
   type: NodeCableType;

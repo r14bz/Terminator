@@ -16,7 +16,7 @@ import {
   ChevronUp,
   Plus,
 } from 'lucide-react';
-import { NodeType, DeviceCategory } from '../types/network';
+import type { NodeType, DeviceCategory } from '../types/network';
 import { DEVICE_METADATA } from '../data/deviceDefinitions';
 
 interface DevicePaletteProps {
