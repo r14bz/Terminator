@@ -36,6 +36,28 @@ interface HistoryStep {
 }
 
 export default function App() {
+  // Theme: light/dark appearance toggle. Persisted so a technician's
+  // preference survives page reloads. Defaults to dark (this app's
+  // original look), but many people find a bright theme easier to read
+  // in well-lit rooms — hence the toggle rather than forcing one.
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window === 'undefined') return 'dark';
+    const saved = window.localStorage.getItem('terminator-theme');
+    return saved === 'light' ? 'light' : 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      window.localStorage.setItem('terminator-theme', theme);
+    } catch {
+      // localStorage can fail in private-browsing/embedded contexts —
+      // theme just won't persist across reloads, which is harmless.
+    }
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+
   // Topology state (Initialized with SOHO network scenario)
   const initialScenario = PRESET_SCENARIOS[0];
   const [topologyName, setTopologyName] = useState(initialScenario.name);
@@ -390,6 +412,63 @@ export default function App() {
   };
 
   // Preset Scenario loader
+  // "Run" — a single beginner-friendly button that tests the whole network
+  // at once: pings every end-user device (PC, laptop, printer, IoT, etc.)
+  // toward the topology's gateway/ISP, then reports how many succeeded.
+  // This complements the manual Ping tool (which tests just one pair) and
+  // the passive health score (which checks configuration, not live traffic).
+  const handleRunNetworkTest = () => {
+    const endDeviceTypes: DeviceType[] = [
+      'pc', 'laptop', 'server', 'smartphone', 'printer', 'cctv',
+      'sensor_temp', 'smart_plug', 'smart_cam', 'smart_lock',
+    ];
+    const testTargets = devices.filter(
+      (d) => endDeviceTypes.includes(d.type) && d.ports.some((p) => p.ipAddress),
+    );
+
+    const gateway =
+      devices.find((d) => d.type === 'cloud_internet') ||
+      devices.find((d) => d.type === 'router' || d.type === 'mikrotik');
+
+    if (!gateway) {
+      showToast('⚠️ Tidak bisa menguji: belum ada Router/Gateway atau ISP Cloud di topologi.');
+      return;
+    }
+    if (testTargets.length === 0) {
+      showToast('⚠️ Tidak ada perangkat pengguna (PC/Laptop/dll) dengan IP untuk diuji.');
+      return;
+    }
+
+    addLog(`[${new Date().toLocaleTimeString('id-ID')}] [Run] Memulai uji jaringan ke ${testTargets.length} perangkat...`);
+
+    let successCount = 0;
+    const failedNames: string[] = [];
+    testTargets.forEach((dev) => {
+      const result = simulatePing(dev.id, gateway.id, devices, links, activeStreams);
+      if (result.success) {
+        successCount++;
+      } else {
+        failedNames.push(dev.name);
+      }
+    });
+
+    const total = testTargets.length;
+    addLog(
+      `[${new Date().toLocaleTimeString('id-ID')}] [Run] Selesai: ${successCount}/${total} perangkat berhasil terhubung ke ${gateway.name}.`,
+    );
+
+    if (failedNames.length === 0) {
+      showToast(`✅ Uji Jaringan selesai — semua ${total} perangkat berhasil terhubung ke ${gateway.name}!`);
+    } else {
+      showToast(
+        `⚠️ Uji Jaringan: ${successCount}/${total} berhasil. Gagal: ${failedNames.slice(0, 3).join(', ')}${failedNames.length > 3 ? ', ...' : ''}`,
+      );
+      // Open the troubleshooting drawer so the learner can see exactly why
+      // the failing devices couldn't be reached, not just that they failed.
+      setIsTroubleshootingOpen(true);
+    }
+  };
+
   const handleSelectScenario = (scenario: PresetScenario) => {
     setTopologyName(scenario.name);
     setDevices(scenario.devices);
@@ -527,12 +606,15 @@ export default function App() {
   }, [selectedDeviceId, selectedLinkId, handleUndo, handleRedo]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-950 font-sans text-slate-100">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--app-bg)] font-sans text-[var(--text-secondary)]">
       {/* Header */}
       <Header
         topologyName={topologyName}
         onSelectScenario={handleSelectScenario}
         diagnosticReport={diagnosticReport}
+        onRunNetworkTest={handleRunNetworkTest}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onOpenPingModal={() => setIsPingModalOpen(true)}
         onOpenTroubleshooting={() => setIsTroubleshootingOpen(true)}
         onOpenDocumentation={() => setIsDocumentationOpen(true)}
@@ -625,7 +707,7 @@ export default function App() {
 
           {/* Toast Notification Banner */}
           {toastMessage && (
-            <div className="absolute left-3 right-3 sm:left-6 sm:right-auto bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-6 z-30 sm:max-w-md bg-slate-900/95 border border-slate-700/80 text-white text-xs px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200">
+            <div className="absolute left-3 right-3 sm:left-6 sm:right-auto bottom-[calc(1.5rem+env(safe-area-inset-bottom,0px))] sm:bottom-6 z-30 sm:max-w-md bg-[var(--surface-1)]/95 border border-[var(--border-1)]/80 text-[var(--text-primary)] text-xs px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200">
               <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping shrink-0" />
               <span className="leading-snug">{toastMessage}</span>
             </div>

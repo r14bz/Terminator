@@ -394,14 +394,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
       onWheel={handleWheel}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      className="relative flex-1 h-full w-full bg-slate-950 overflow-hidden select-none cursor-crosshair touch-none"
+      className="relative flex-1 h-full w-full bg-[var(--app-bg)] overflow-hidden select-none cursor-crosshair touch-none"
     >
       {/* Background Grid */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           backgroundImage: `
-            radial-gradient(circle, rgba(148, 163, 184, 0.12) 1.5px, transparent 1.5px)
+            radial-gradient(circle, var(--canvas-dot) 1.5px, transparent 1.5px)
           `,
           backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
           backgroundPosition: `${pan.x}px ${pan.y}px`,
@@ -645,8 +645,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                   isConnectingSource
                     ? 'ring-4 ring-amber-400 border-amber-300 bg-amber-950/60 scale-110 animate-pulse'
                     : isSelected
-                    ? 'ring-4 ring-blue-500/50 border-blue-400 bg-slate-900 shadow-blue-500/20'
-                    : 'border-slate-700/80 bg-slate-900/90 hover:border-slate-500 hover:bg-slate-800'
+                    ? 'ring-4 ring-blue-500/50 border-blue-400 bg-[var(--surface-1)] shadow-blue-500/20'
+                    : 'border-[var(--border-1)]/80 bg-[var(--surface-1)]/90 hover:border-[var(--border-1)] hover:bg-[var(--surface-2)]'
                 }`}
                 style={{
                   boxShadow: isSelected ? `0 0 20px ${tmpl.color}40` : '0 4px 12px rgba(0,0,0,0.5)',
@@ -667,20 +667,20 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                 />
 
                 {/* Port count badge */}
-                <div className="absolute -bottom-1 -left-1 bg-slate-800 border border-slate-700 text-slate-300 text-[9px] font-mono px-1 rounded">
+                <div className="absolute -bottom-1 -left-1 bg-[var(--surface-2)] border border-[var(--border-1)] text-[var(--text-secondary)] text-[9px] font-mono px-1 rounded">
                   {device.ports.length}p
                 </div>
               </div>
 
               {/* Hostname & IP / FTTH / IoT Badges */}
               <div className="mt-1.5 flex flex-col items-center text-center max-w-[120px]">
-                <span className="text-xs font-semibold text-slate-200 truncate leading-tight group-hover:text-blue-400">
+                <span className="text-xs font-semibold text-[var(--text-secondary)] truncate leading-tight group-hover:text-blue-400">
                   {device.name}
                 </span>
 
                 {/* IP Display */}
                 {ipDisplay && (
-                  <span className="text-[10px] font-mono font-medium text-emerald-400/90 bg-slate-900/90 px-1 rounded border border-slate-800/80 mt-0.5 truncate max-w-full">
+                  <span className="text-[10px] font-mono font-medium text-emerald-400/90 bg-[var(--surface-1)]/90 px-1 rounded border border-[var(--border-2)]/80 mt-0.5 truncate max-w-full">
                     {ipDisplay}
                   </span>
                 )}
@@ -709,7 +709,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                     {device.iotTelemetry.plugState && (
                       <span
                         className={`text-[8px] font-bold px-1 rounded ${
-                          device.iotTelemetry.plugState === 'ON' ? 'bg-emerald-950 text-emerald-400 border border-emerald-700' : 'bg-slate-800 text-slate-500'
+                          device.iotTelemetry.plugState === 'ON' ? 'bg-emerald-950 text-emerald-400 border border-emerald-700' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'
                         }`}
                       >
                         {device.iotTelemetry.plugState}
@@ -724,32 +724,32 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
       </div>
 
       {/* Floating Canvas Controls (Bottom Right) */}
-      <div className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl p-1.5 shadow-2xl backdrop-blur-md text-xs text-slate-300">
+      <div className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-[var(--surface-1)]/90 border border-[var(--border-2)] rounded-xl p-1.5 shadow-2xl backdrop-blur-md text-xs text-[var(--text-secondary)]">
         <button
           onClick={() => setZoom((z) => Math.min(2.5, z * 1.2))}
-          className="p-1.5 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"
+          className="p-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] rounded-lg transition-colors"
           title="Perbesar (Zoom In)"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
 
-        <span className="text-[11px] font-mono px-1.5 text-slate-400 min-w-10 text-center">
+        <span className="text-[11px] font-mono px-1.5 text-[var(--text-muted)] min-w-10 text-center">
           {Math.round(zoom * 100)}%
         </span>
 
         <button
           onClick={() => setZoom((z) => Math.max(0.4, z * 0.8))}
-          className="p-1.5 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"
+          className="p-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] rounded-lg transition-colors"
           title="Perkecil (Zoom Out)"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
 
-        <div className="h-4 w-[1px] bg-slate-800 mx-0.5" />
+        <div className="h-4 w-[1px] bg-[var(--surface-2)] mx-0.5" />
 
         <button
           onClick={handleFitView}
-          className="p-1.5 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"
+          className="p-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] rounded-lg transition-colors"
           title="Pusatkan Seluruh Topologi (Fit to Screen)"
         >
           <Maximize2 className="w-4 h-4" />
@@ -760,7 +760,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
             setZoom(1);
             setPan({ x: 0, y: 0 });
           }}
-          className="p-1.5 hover:bg-slate-800 hover:text-white rounded-lg transition-colors"
+          className="p-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] rounded-lg transition-colors"
           title="Reset Sudut Pandang (100%)"
         >
           <Move className="w-4 h-4" />
@@ -769,10 +769,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
 
       {/* Selected Action Quick Toolbar (Top Center) */}
       {(selectedDeviceId || selectedLinkId) && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 border border-slate-800 rounded-xl px-3 py-1.5 shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs text-slate-200 animate-in fade-in slide-in-from-top-2">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-[var(--surface-1)]/95 border border-[var(--border-2)] rounded-xl px-3 py-1.5 shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs text-[var(--text-secondary)] animate-in fade-in slide-in-from-top-2">
           {selectedDeviceId && (
             <>
-              <span className="font-semibold text-white">
+              <span className="font-semibold text-[var(--text-primary)]">
                 {devices.find((d) => d.id === selectedDeviceId)?.name}
               </span>
               <button
@@ -789,12 +789,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
           )}
 
           {selectedLinkId && (
-            <span className="font-semibold text-slate-300">
+            <span className="font-semibold text-[var(--text-secondary)]">
               Kabel: {links.find((l) => l.id === selectedLinkId)?.cableType.replace('_', ' ')}
             </span>
           )}
 
-          <div className="h-4 w-[1px] bg-slate-800" />
+          <div className="h-4 w-[1px] bg-[var(--surface-2)]" />
 
           <button
             onClick={onDeleteSelected}

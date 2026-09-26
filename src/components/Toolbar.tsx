@@ -10,6 +10,7 @@ import {
   Undo2,
   Redo2,
   Image as ImageIcon,
+  Info,
 } from 'lucide-react';
 import { CableType } from '../types/network';
 
@@ -53,14 +54,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       id: 'pointer' as const,
       label: 'Pilih',
       fullLabel: 'Pointer / Pilih Perangkat',
+      desc: 'Klik untuk memilih perangkat, seret untuk memindahkannya di kanvas.',
       icon: MousePointer,
       shortcut: 'V',
-      color: 'text-slate-200',
+      color: 'text-[var(--text-secondary)]',
     },
     {
       id: 'auto_connect' as const,
       label: 'Auto-Koneksi',
       fullLabel: 'Auto-Koneksi Cerdas (deteksi port otomatis)',
+      desc: 'Klik 2 perangkat berurutan — sistem otomatis memilih jenis kabel & port yang cocok untuk kamu.',
       icon: Zap,
       shortcut: 'A',
       color: 'text-amber-400',
@@ -69,6 +72,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       id: 'ping_tool' as const,
       label: 'Ping',
       fullLabel: 'Alat Cepat Uji Ping (ICMP)',
+      desc: 'Klik 2 perangkat untuk mengecek apakah keduanya bisa saling terhubung (kirim paket uji/ICMP).',
       icon: Activity,
       shortcut: 'P',
       color: 'text-emerald-400',
@@ -77,6 +81,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       id: 'ethernet_straight' as const,
       label: 'LAN Straight',
       fullLabel: 'Kabel LAN Straight-Through (RJ45)',
+      desc: 'Kabel LAN biasa. Pakai ini untuk menghubungkan perangkat BERBEDA jenis, misal PC ke Switch, atau Switch ke Router.',
       icon: Cable,
       color: 'text-sky-400',
     },
@@ -84,6 +89,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       id: 'ethernet_crossover' as const,
       label: 'LAN Cross',
       fullLabel: 'Kabel LAN Crossover (RJ45)',
+      desc: 'Kabel LAN silang. Pakai ini untuk menghubungkan perangkat yang SAMA jenis, misal PC ke PC, atau Switch ke Switch.',
       icon: Cable,
       color: 'text-orange-400',
     },
@@ -91,6 +97,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       id: 'fiber_single' as const,
       label: 'Fiber PON',
       fullLabel: 'Fiber Optik Single Mode (GPON SC/APC)',
+      desc: 'Kabel fiber optik untuk jaringan FTTH — menyambungkan OLT ke ODP/Splitter, atau ODP ke ONT pelanggan.',
       icon: Cable,
       color: 'text-yellow-400',
     },
@@ -98,6 +105,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       id: 'fiber_multi' as const,
       label: 'Fiber SFP',
       fullLabel: 'Fiber Optik SFP Multi Mode (LC/LC)',
+      desc: 'Kabel fiber untuk uplink kecepatan tinggi antar perangkat inti, misal antar Switch Core atau Switch ke Router.',
       icon: Cable,
       color: 'text-teal-400',
     },
@@ -105,6 +113,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       id: 'wireless_link' as const,
       label: 'Nirkabel',
       fullLabel: 'Koneksi Nirkabel (Wi-Fi / Mesh)',
+      desc: 'Sambungan tanpa kabel fisik — untuk perangkat Wi-Fi, Access Point, atau Mesh Node.',
       icon: Radio,
       color: 'text-purple-400',
     },
@@ -112,14 +121,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       id: 'delete_tool' as const,
       label: 'Hapus',
       fullLabel: 'Alat Hapus Perangkat/Kabel',
+      desc: 'Klik perangkat atau kabel yang ingin dihapus dari topologi. Hati-hati, tidak ada konfirmasi ulang.',
       icon: Trash2,
       shortcut: 'Del',
       color: 'text-red-400',
     },
   ];
 
+  const activeToolInfo = tools.find((t) => t.id === activeTool);
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5 bg-slate-900/95 backdrop-blur-md border border-slate-700 rounded-xl px-2.5 py-2 shadow-xl text-xs select-none">
+    <div className="flex flex-wrap items-center gap-1.5 bg-[var(--surface-1)]/95 backdrop-blur-md border border-[var(--border-1)] rounded-xl px-2.5 py-2 shadow-xl text-xs select-none">
       {/* Undo / Redo controls in toolbar */}
       {(onUndo || onRedo) && (
         <>
@@ -128,7 +140,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               onClick={onUndo}
               disabled={!canUndo}
               title={undoDescription ? `Urungkan: ${undoDescription} (Ctrl+Z)` : 'Urungkan (Ctrl+Z)'}
-              className="p-2 sm:p-1.5 rounded-lg bg-slate-800/70 border border-slate-700 text-slate-200 hover:text-white hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800/70 disabled:cursor-not-allowed transition-all"
+              className="p-2 sm:p-1.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--border-1)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] disabled:opacity-30 disabled:hover:bg-[var(--surface-2)]/80 disabled:cursor-not-allowed transition-all"
             >
               <Undo2 className="w-3.5 h-3.5" />
             </button>
@@ -136,12 +148,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               onClick={onRedo}
               disabled={!canRedo}
               title={redoDescription ? `Ulangi: ${redoDescription} (Ctrl+Y)` : 'Ulangi (Ctrl+Y)'}
-              className="p-2 sm:p-1.5 rounded-lg bg-slate-800/70 border border-slate-700 text-slate-200 hover:text-white hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800/70 disabled:cursor-not-allowed transition-all"
+              className="p-2 sm:p-1.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--border-1)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-3)] disabled:opacity-30 disabled:hover:bg-[var(--surface-2)]/80 disabled:cursor-not-allowed transition-all"
             >
               <Redo2 className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="h-4 w-[1px] bg-slate-700 mx-0.5" />
+          <div className="h-4 w-[1px] bg-[var(--surface-3)] mx-0.5" />
         </>
       )}
 
@@ -158,7 +170,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               className={`flex items-center gap-1.5 px-2.5 py-2 sm:py-1.5 rounded-lg font-semibold border transition-all ${
                 isActive
                   ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-500/20'
-                  : 'bg-slate-800/70 border-slate-700 text-slate-200 hover:bg-slate-700 hover:border-slate-600'
+                  : 'bg-[var(--surface-2)]/80 border-[var(--border-1)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] hover:border-[var(--border-1)]'
               }`}
             >
               <Icon className={`w-4 h-4 ${isActive ? 'text-white' : t.color}`} />
@@ -168,7 +180,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         })}
       </div>
 
-      <div className="h-4 w-[1px] bg-slate-700 mx-1" />
+      <div className="h-4 w-[1px] bg-[var(--surface-3)] mx-1" />
 
       {/* Cable Connectors */}
       <div className="flex items-center gap-1 flex-wrap">
@@ -182,8 +194,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
               title={t.fullLabel}
               className={`flex items-center gap-1 px-2 py-2 sm:py-1.5 rounded-lg text-[11px] font-medium border transition-all ${
                 isActive
-                  ? 'bg-slate-700 border-blue-500 text-white ring-1 ring-blue-500'
-                  : 'bg-slate-800/70 border-slate-700 text-slate-200 hover:bg-slate-700 hover:border-slate-600'
+                  ? 'bg-[var(--surface-3)] border-blue-500 text-[var(--text-primary)] ring-1 ring-blue-500'
+                  : 'bg-[var(--surface-2)]/80 border-[var(--border-1)] text-[var(--text-secondary)] hover:bg-[var(--surface-3)] hover:border-[var(--border-1)]'
               }`}
             >
               <Icon className={`w-3.5 h-3.5 ${t.color}`} />
@@ -193,7 +205,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         })}
       </div>
 
-      <div className="h-4 w-[1px] bg-slate-700 mx-1" />
+      <div className="h-4 w-[1px] bg-[var(--surface-3)] mx-1" />
 
       {/* Delete Tool */}
       <button
@@ -212,11 +224,11 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       {/* Quick Export Image in Toolbar */}
       {onOpenExportImage && (
         <>
-          <div className="h-4 w-[1px] bg-slate-700 mx-1" />
+          <div className="h-4 w-[1px] bg-[var(--surface-3)] mx-1" />
           <button
             onClick={onOpenExportImage}
             title="Ekspor Diagram ke Gambar PNG/SVG"
-            className="flex items-center gap-1 px-2 py-2 sm:py-1.5 rounded-lg text-[11px] font-medium bg-indigo-950/50 border border-indigo-800/60 text-indigo-200 hover:bg-indigo-900/60 hover:text-white transition-all"
+            className="flex items-center gap-1 px-2 py-2 sm:py-1.5 rounded-lg text-[11px] font-medium bg-indigo-950/50 border border-indigo-800/60 text-indigo-200 hover:bg-indigo-900/60 hover:text-[var(--text-primary)] transition-all"
           >
             <ImageIcon className="w-3.5 h-3.5" />
             <span>PNG/SVG</span>
@@ -230,11 +242,23 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           {onCancelConnecting && (
             <button
               onClick={onCancelConnecting}
-              className="text-slate-400 hover:text-white underline text-[10px]"
+              className="text-[var(--text-muted)] hover:text-[var(--text-primary)] underline text-[10px]"
             >
               Batal
             </button>
           )}
+        </div>
+      )}
+
+      {/* Beginner-friendly live explanation of whichever tool is currently
+          selected — always visible, so a novice technician never has to
+          guess what an icon does. Updates automatically on tool switch. */}
+      {activeToolInfo && (
+        <div className="basis-full flex items-start gap-1.5 pt-1.5 mt-0.5 border-t border-[var(--border-1)]/70 text-[11px] text-[var(--text-secondary)] leading-snug">
+          <Info className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+          <span>
+            <strong className="text-[var(--text-primary)]">{activeToolInfo.label}:</strong> {activeToolInfo.desc}
+          </span>
         </div>
       )}
     </div>

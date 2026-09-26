@@ -1,5 +1,53 @@
 @import "tailwindcss";
 
+/* ============================================================
+   THEME TOKENS
+   A CSS-variable based theme system so the app can switch between
+   dark and light appearance. Defaults to dark; add data-theme="light"
+   on <html> (done from App.tsx) to switch. Components reference these
+   via Tailwind arbitrary values, e.g. bg-[var(--surface-1)], so the
+   same className works in both themes.
+   NOTE: this pass converts the app's outer shell (header, toolbar,
+   canvas, sidebar) to these tokens. Some modal dialogs still use
+   fixed dark colors and will be migrated in a follow-up pass — see
+   chat notes for which ones remain.
+   ============================================================ */
+:root {
+  color-scheme: dark;
+  --app-bg: #020617;          /* page background, was slate-950 */
+  --surface-1: #0f172a;       /* main panels/cards, was slate-900 */
+  --surface-2: #1e293b;       /* secondary surface, was slate-800 */
+  --surface-3: #334155;       /* hover/active surface, was slate-700 */
+  --border-1: #334155;        /* default border, was slate-700 */
+  --border-2: #1e293b;        /* subtle border, was slate-800 */
+  --text-primary: #ffffff;
+  --text-secondary: #e2e8f0;  /* was slate-200 */
+  --text-muted: #94a3b8;      /* was slate-400 */
+  --canvas-dot: rgba(255, 255, 255, 0.07);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --app-bg: #eef2f7;
+  --surface-1: #ffffff;
+  --surface-2: #f1f5f9;       /* was slate-100 */
+  --surface-3: #e2e8f0;       /* was slate-200 */
+  --border-1: #cbd5e1;        /* was slate-300 */
+  --border-2: #e2e8f0;        /* was slate-200 */
+  --text-primary: #0f172a;    /* was slate-900 */
+  --text-secondary: #334155;  /* was slate-700 */
+  --text-muted: #64748b;      /* was slate-500 */
+  --canvas-dot: rgba(15, 23, 42, 0.12);
+}
+
+html {
+  background: var(--app-bg);
+}
+body {
+  background: var(--app-bg);
+  color: var(--text-primary);
+}
+
 @layer utilities {
   /* Subtle custom scrollbar */
   .custom-scrollbar::-webkit-scrollbar {

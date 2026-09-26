@@ -90,23 +90,23 @@ export const DeviceSidebar: React.FC<DeviceSidebarProps> = ({ onAddDevice, isOpe
 
   return (
     <aside
-      className={`fixed md:static inset-y-0 left-0 z-30 w-64 sm:w-72 bg-slate-900 border-r border-slate-800 flex flex-col h-full select-none shrink-0 text-slate-200 transition-transform duration-200 ${
+      className={`fixed md:static inset-y-0 left-0 z-30 w-64 sm:w-72 bg-[var(--surface-1)] border-r border-[var(--border-2)] flex flex-col h-full select-none shrink-0 text-[var(--text-secondary)] transition-transform duration-200 ${
         isOpenMobile ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}
     >
       {/* Search Header */}
-      <div className="p-3 border-b border-slate-800">
+      <div className="p-3 border-b border-[var(--border-2)]">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <input
             type="text"
             placeholder="Cari perangkat (PC, OLT, ODC, Sensor)..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+            className="w-full bg-[var(--surface-2)] border border-[var(--border-2)] rounded-lg pl-8 pr-3 py-1.5 text-xs text-[var(--text-secondary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-blue-500 transition-colors"
           />
         </div>
-        <div className="flex items-center justify-between mt-1.5 px-0.5 text-[10px] text-slate-400">
+        <div className="flex items-center justify-between mt-1.5 px-0.5 text-[10px] text-[var(--text-muted)]">
           <span>Klik / seret ke kanvas</span>
           {onCloseMobile && (
             <button onClick={onCloseMobile} className="md:hidden text-blue-400 font-medium">
@@ -127,17 +127,17 @@ export const DeviceSidebar: React.FC<DeviceSidebarProps> = ({ onAddDevice, isOpe
             <div key={cat.id} className="space-y-1">
               <button
                 onClick={() => toggleCategory(cat.id)}
-                className="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+                className="w-full flex items-center justify-between px-2 py-1 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
               >
                 <span className="flex items-center gap-1.5 truncate">
                   {isCollapsed ? (
-                    <ChevronRight className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                    <ChevronRight className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
                   ) : (
-                    <ChevronDown className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                    <ChevronDown className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
                   )}
                   <span className="truncate">{cat.label}</span>
                 </span>
-                <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">
+                <span className="text-[10px] bg-[var(--surface-2)] px-1.5 py-0.5 rounded text-[var(--text-muted)]">
                   {catDevices.length}
                 </span>
               </button>
@@ -159,7 +159,7 @@ export const DeviceSidebar: React.FC<DeviceSidebarProps> = ({ onAddDevice, isOpe
                             onCloseMobile();
                           }
                         }}
-                        className="group flex items-center justify-between p-2 rounded-lg bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800/70 hover:border-blue-500/50 cursor-pointer transition-all hover:shadow-md"
+                        className="group flex items-center justify-between p-2 rounded-lg bg-[var(--surface-2)]/60 hover:bg-[var(--surface-2)] border border-[var(--border-2)]/70 hover:border-blue-500/50 cursor-pointer transition-all hover:shadow-md"
                         title={tmpl.description}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
@@ -170,10 +170,10 @@ export const DeviceSidebar: React.FC<DeviceSidebarProps> = ({ onAddDevice, isOpe
                             <Icon className="w-4 h-4" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs font-medium text-slate-200 group-hover:text-blue-300 truncate">
+                            <div className="text-xs font-medium text-[var(--text-secondary)] group-hover:text-blue-300 truncate">
                               {tmpl.defaultName}
                             </div>
-                            <div className="text-[10px] text-slate-400 truncate">
+                            <div className="text-[10px] text-[var(--text-muted)] truncate">
                               {tmpl.defaultPorts.length} Port{' '}
                               {tmpl.category === 'optical' ? '(FTTH FO)' : tmpl.category === 'iot_smart' ? '(IoT)' : ''}
                             </div>
@@ -188,7 +188,7 @@ export const DeviceSidebar: React.FC<DeviceSidebarProps> = ({ onAddDevice, isOpe
                               onCloseMobile();
                             }
                           }}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-white hover:bg-blue-600 rounded transition-all shrink-0 ml-1"
+                          className="opacity-0 group-hover:opacity-100 p-1 text-[var(--text-muted)] hover:text-white hover:bg-blue-600 rounded transition-all shrink-0 ml-1"
                           title="Tambah ke kanvas"
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -204,7 +204,7 @@ export const DeviceSidebar: React.FC<DeviceSidebarProps> = ({ onAddDevice, isOpe
       </div>
 
       {/* Footer Info */}
-      <div className="p-2.5 border-t border-slate-800 bg-slate-950/40 text-[11px] text-slate-400 flex items-center justify-between">
+      <div className="p-2.5 border-t border-[var(--border-2)] bg-[var(--surface-2)]/40 text-[11px] text-[var(--text-muted)] flex items-center justify-between">
         <span>Total: {Object.keys(DEVICE_TEMPLATES).length} Perangkat</span>
         <span className="text-emerald-400 font-mono text-[10px]">TERMINATOR v3.0</span>
       </div>

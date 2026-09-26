@@ -18,6 +18,8 @@ import {
   Image as ImageIcon,
   Undo2,
   Redo2,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { PRESET_SCENARIOS, PresetScenario } from '../constants/presetTopologies';
 import { DiagnosticsReport } from '../utils/diagnosticsEngine';
@@ -26,6 +28,9 @@ interface HeaderProps {
   topologyName: string;
   onSelectScenario: (scenario: PresetScenario) => void;
   diagnosticReport: DiagnosticsReport;
+  onRunNetworkTest: () => void;
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
   onOpenPingModal: () => void;
   onOpenTroubleshooting: () => void;
   onOpenDocumentation: () => void;
@@ -52,6 +57,9 @@ export const Header: React.FC<HeaderProps> = ({
   topologyName,
   onSelectScenario,
   diagnosticReport,
+  onRunNetworkTest,
+  theme,
+  onToggleTheme,
   onOpenPingModal,
   onOpenTroubleshooting,
   onOpenDocumentation,
@@ -95,13 +103,13 @@ export const Header: React.FC<HeaderProps> = ({
   const hasIssues = diagnosticReport.totalIssues > 0;
 
   return (
-    <header className="h-14 bg-slate-900 border-b border-slate-800 px-3 sm:px-4 flex items-center justify-between gap-2 select-none text-slate-200 z-30 shrink-0">
+    <header className="h-14 bg-[var(--surface-1)] border-b border-[var(--border-2)] px-3 sm:px-4 flex items-center justify-between gap-2 select-none text-[var(--text-secondary)] z-30 shrink-0">
       {/* Brand & Mobile Hamburger */}
       <div className="flex items-center gap-2 sm:gap-3">
         {onToggleMobileSidebar && (
           <button
             onClick={onToggleMobileSidebar}
-            className="md:hidden p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            className="md:hidden p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] rounded-lg transition-colors"
             title="Buka Menu Perangkat"
           >
             <Menu className="w-5 h-5" />
@@ -114,24 +122,24 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-black text-sm tracking-tight text-white">TERMINATOR</span>
+              <span className="font-black text-sm tracking-tight text-[var(--text-primary)]">TERMINATOR</span>
               <span className="text-[10px] bg-blue-950 text-blue-300 font-mono px-1 rounded border border-blue-800/60 hidden sm:inline">
                 v3.0
               </span>
             </div>
-            <p className="text-[10px] text-slate-400 -mt-0.5 hidden sm:block truncate max-w-[170px] lg:max-w-none">
+            <p className="text-[10px] text-[var(--text-muted)] -mt-0.5 hidden sm:block truncate max-w-[170px] lg:max-w-none">
               Terminal Network Simulator &bull; Topologi, FTTH, IoT &amp; Diagnostik
             </p>
           </div>
         </div>
 
         {/* Undo / Redo Header Controls */}
-        <div className="hidden sm:flex items-center gap-1 pl-2 border-l border-slate-800">
+        <div className="hidden sm:flex items-center gap-1 pl-2 border-l border-[var(--border-2)]">
           <button
             onClick={onUndo}
             disabled={!canUndo}
             title={undoDescription ? `Urungkan: ${undoDescription} (Ctrl+Z)` : 'Urungkan (Ctrl+Z)'}
-            className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all"
+            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all"
           >
             <Undo2 className="w-4 h-4" />
           </button>
@@ -139,7 +147,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onRedo}
             disabled={!canRedo}
             title={redoDescription ? `Ulangi: ${redoDescription} (Ctrl+Y)` : 'Ulangi (Ctrl+Y)'}
-            className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all"
+            className="p-1.5 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all"
           >
             <Redo2 className="w-4 h-4" />
           </button>
@@ -147,8 +155,8 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Preset Scenarios Selector — visible on all screen sizes so mobile
             learners can also load example topologies, not just desktop */}
-        <div className="flex items-center gap-1.5 pl-2 sm:pl-3 border-l border-slate-800 min-w-0">
-          <span className="text-xs text-slate-400 font-medium hidden lg:inline shrink-0">Skenario:</span>
+        <div className="flex items-center gap-1.5 pl-2 sm:pl-3 border-l border-[var(--border-2)] min-w-0">
+          <span className="text-xs text-[var(--text-muted)] font-medium hidden lg:inline shrink-0">Skenario:</span>
           <select
             onChange={(e) => {
               const sc = PRESET_SCENARIOS.find((s) => s.id === e.target.value);
@@ -156,7 +164,7 @@ export const Header: React.FC<HeaderProps> = ({
             }}
             defaultValue=""
             title="Muat Skenario Topologi Contoh"
-            className="bg-slate-950 border border-slate-800 text-xs text-slate-300 rounded-lg px-2 sm:px-2.5 py-1 focus:outline-none focus:border-blue-500 hover:border-slate-700 font-medium transition-colors w-24 sm:w-auto sm:max-w-[10rem] lg:max-w-xs truncate"
+            className="bg-[var(--surface-2)] border border-[var(--border-2)] text-xs text-[var(--text-secondary)] rounded-lg px-2 sm:px-2.5 py-1 focus:outline-none focus:border-blue-500 hover:border-[var(--border-1)] font-medium transition-colors w-24 sm:w-auto sm:max-w-[10rem] lg:max-w-xs truncate"
           >
             <option value="" disabled>
               Pilih Skenario...
@@ -173,10 +181,23 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Main Action Buttons */}
       <div className="relative flex-1 min-w-0 flex justify-end">
       <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pr-1">
+        {/* RUN — one-click test of the whole network at once (pings every
+            user device to the gateway/internet), for beginners who don't
+            want to manually pick two devices with the Ping tool. */}
+        <button
+          onClick={onRunNetworkTest}
+          title="Jalankan uji koneksi ke semua perangkat sekaligus"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/30 transition-all shrink-0"
+        >
+          <Play className="w-3.5 h-3.5 fill-current" />
+          <span>Run</span>
+        </button>
+
         {/* Test Ping Button */}
         <button
           onClick={onOpenPingModal}
           className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-500/20 transition-all shrink-0"
+          title="Uji ping manual: pilih 2 perangkat tertentu untuk diuji"
         >
           <Activity className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Uji Ping</span>
@@ -188,7 +209,7 @@ export const Header: React.FC<HeaderProps> = ({
           className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all shrink-0 ${
             isTrafficActive
               ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md shadow-amber-500/30 animate-pulse'
-              : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700'
+              : 'bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-amber-300 border-[var(--border-1)]'
           }`}
           title="Simulasi Beban Jaringan & Traffic Saturation"
         >
@@ -199,13 +220,13 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Live Monitoring & Logs Drawer Button */}
         <button
           onClick={onOpenLiveMonitoring}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium border border-slate-700 transition-all shrink-0"
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] text-[var(--text-secondary)] rounded-xl text-xs font-medium border border-[var(--border-1)] transition-all shrink-0"
           title="Buka Terminal Log & Status Real-Time"
         >
           <Terminal className="w-3.5 h-3.5 text-sky-400" />
           <span className="hidden md:inline">Log</span>
           {logCount > 0 && (
-            <span className="text-[10px] bg-slate-900 px-1.5 py-0.2 rounded-full font-mono text-slate-400">
+            <span className="text-[10px] bg-[var(--surface-1)] px-1.5 py-0.2 rounded-full font-mono text-[var(--text-muted)]">
               {logCount}
             </span>
           )}
@@ -217,7 +238,7 @@ export const Header: React.FC<HeaderProps> = ({
           className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all shrink-0 ${
             hasIssues
               ? 'bg-amber-950/50 text-amber-300 border-amber-500/40 hover:bg-amber-950/70'
-              : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 hover:text-white'
+              : 'bg-[var(--surface-2)] text-[var(--text-secondary)] border-[var(--border-1)] hover:bg-[var(--surface-3)] hover:text-[var(--text-primary)]'
           }`}
         >
           <Wrench className="w-3.5 h-3.5" />
@@ -252,14 +273,14 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="hidden sm:inline">Laporan</span>
         </button>
 
-        <div className="h-4 w-[1px] bg-slate-800 mx-0.5 hidden sm:block" />
+        <div className="h-4 w-[1px] bg-[var(--surface-2)] mx-0.5 hidden sm:block" />
 
         {/* Import JSON */}
         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
         <button
           onClick={() => fileInputRef.current?.click()}
           title="Buka / Import file topologi (.json)"
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+          className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] rounded-lg transition-colors shrink-0"
         >
           <FolderOpen className="w-4 h-4" />
         </button>
@@ -268,7 +289,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onExportJson}
           title="Simpan / Export topologi (.json)"
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+          className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] rounded-lg transition-colors shrink-0"
         >
           <Download className="w-4 h-4" />
         </button>
@@ -277,7 +298,7 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onClearCanvas}
           title="Bersihkan kanvas (Mulai dari awal)"
-          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+          className="p-1.5 text-[var(--text-muted)] hover:text-red-400 hover:bg-[var(--surface-2)] rounded-lg transition-colors shrink-0"
         >
           <RotateCcw className="w-4 h-4" />
         </button>
@@ -286,15 +307,24 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onOpenHelp}
           title="Bantuan & Petunjuk Penggunaan"
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+          className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] rounded-lg transition-colors shrink-0"
         >
           <HelpCircle className="w-4 h-4" />
+        </button>
+
+        {/* Light / Dark theme toggle */}
+        <button
+          onClick={onToggleTheme}
+          title={theme === 'dark' ? 'Ganti ke tampilan terang' : 'Ganti ke tampilan gelap'}
+          className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-2)] rounded-lg transition-colors shrink-0"
+        >
+          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
       </div>
 
       {/* Fade hint showing the action row is horizontally scrollable on
           narrow/mobile screens where not all buttons fit at once */}
-      <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-slate-900 to-transparent sm:hidden" />
+      <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[var(--surface-1)] to-transparent sm:hidden" />
       </div>
     </header>
   );
