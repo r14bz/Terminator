@@ -5,7 +5,7 @@ import type { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { CABLE_METADATA } from '../data/cableDefinitions';
 import { buildInternetAccessMap } from '../utils/internetAccessMap';
 import { boundsOf, clampZoom, computeFitView } from '../utils/zoom';
-import { CARD_MIN_HEIGHT, CARD_WIDTH } from '../utils/nodePlacement';
+import { CARD_MAX_HEIGHT, CARD_WIDTH } from '../utils/nodePlacement';
 
 interface CanvasProps {
   nodes: NetworkNode[];
@@ -76,7 +76,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
     }
     const box = boundsOf(nodes.map((n) => ({ x: n.x, y: n.y })), {
       width: CARD_WIDTH,
-      height: CARD_MIN_HEIGHT,
+      height: CARD_MAX_HEIGHT,
     });
     const view = computeFitView(box, {
       width: containerRef.current?.clientWidth || 1000,
