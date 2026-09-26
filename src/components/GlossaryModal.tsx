@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, BookOpen, Search, ShieldCheck, Tag, Info } from 'lucide-react';
-import { NETWORK_GLOSSARY, GlossaryItem } from '../data/glossary';
+import { X, BookOpen, Search, ShieldCheck, Tag } from 'lucide-react';
+import { NETWORK_GLOSSARY } from '../data/glossary';
 
 interface GlossaryModalProps {
   isOpen: boolean;

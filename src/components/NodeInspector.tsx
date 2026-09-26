@@ -1,25 +1,5 @@
 import React, { useState } from 'react';
-import {
-  X,
-  Power,
-  Trash2,
-  Terminal,
-  Activity,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  Server,
-  Radio,
-  Sliders,
-  ShieldCheck,
-  Zap,
-  Globe,
-  Wifi,
-  Lock,
-  Tag,
-  Gauge,
-  Video,
-} from 'lucide-react';
+import { X, Power, Trash2, Terminal, Activity, CheckCircle2, AlertTriangle, Info, Server, Sliders, ShieldCheck, Globe, Wifi, Lock, Tag, Gauge, Video } from 'lucide-react';
 import { NetworkNode, CableConnection } from '../types/network';
 import { DEVICE_METADATA } from '../data/deviceDefinitions';
 import { DEVICE_BRANDS } from '../data/deviceBrands';

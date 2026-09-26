@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Activity, X, Zap, CheckCircle2, AlertTriangle, Disc } from 'lucide-react';
+import { X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { NetworkNode } from '../types/network';
 

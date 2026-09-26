@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, FolderOpen, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { X, FolderOpen, ArrowRight } from 'lucide-react';
 import { TOPOLOGY_TEMPLATES, TopologyTemplate } from '../data/templates';
 
 interface TemplateModalProps {

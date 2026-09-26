@@ -9,10 +9,11 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "npm run test:ip && npm run test:optical && npm run test:ping",
+    "test": "npm run test:ip && npm run test:optical && npm run test:ping && npm run test:history",
     "test:ip": "node scripts/verify-ipUtils.mjs",
     "test:optical": "node scripts/verify-optical.mjs",
-    "test:ping": "node --import ./scripts/ts-resolve.mjs scripts/verify-ping.mjs"
+    "test:ping": "node --import ./scripts/ts-resolve.mjs scripts/verify-ping.mjs",
+    "test:history": "node --import ./scripts/ts-resolve.mjs scripts/verify-history.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

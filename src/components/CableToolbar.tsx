@@ -1,17 +1,5 @@
 import React from 'react';
-import {
-  MousePointer,
-  Move,
-  Hand,
-  Cable,
-  Activity,
-  Send,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-  Trash2,
-  HelpCircle,
-} from 'lucide-react';
+import { MousePointer, Move, Hand, Cable, Activity, Send, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { NodeCableType, ActiveTool } from '../types/network';
 import { CABLE_METADATA } from '../data/cableDefinitions';
 

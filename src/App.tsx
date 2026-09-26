@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { DevicePalette } from './components/DevicePalette';
 import { CableToolbar } from './components/CableToolbar';
@@ -18,6 +18,8 @@ import { DEVICE_BRANDS } from './data/deviceBrands';
 import { calculateOpticalPowers } from './utils/opticalCalculator';
 import { runNetworkDiagnostics } from './utils/diagnosticEngine';
 import { planPing } from './utils/pingTool';
+import type { HistoryState } from './utils/historyCore';
+import { canRedo as stackCanRedo, canUndo as stackCanUndo, createHistory, pushSnapshot, redo as stackRedo, undo as stackUndo } from './utils/historyCore';
 import { toPng } from 'html-to-image';
 
 // Templates are module-level singletons. Seeding state with them directly
@@ -40,16 +42,14 @@ export default function App() {
   // Implemented as a debounced snapshot of {nodes, cables}: any change is
   // recorded ~500ms after things settle, so a drag gesture (which fires many
   // rapid position updates) collapses into a single undo step instead of
-  // flooding the history with every intermediate frame. Kept in refs (not
-  // state) since it's written on every change; a small counter forces a
-  // re-render so the Undo/Redo buttons' disabled state stays accurate.
-  const historyRef = useRef<{ nodes: NetworkNode[]; cables: CableConnection[] }[]>([
-    cloneTemplate(TOPOLOGY_TEMPLATES[0]),
-  ]);
-  const historyIndexRef = useRef(0);
+  // flooding the history with every intermediate frame. The stack itself is
+  // plain data in src/utils/historyCore.ts, which keeps the cursor and
+  // truncation rules testable on their own.
+  const [history, setHistory] = useState<HistoryState>(
+    () => createHistory(cloneTemplate(TOPOLOGY_TEMPLATES[0])),
+  );
   const isRestoringRef = useRef(false);
   const historyDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [historyTick, setHistoryTick] = useState(0);
 
   useEffect(() => {
     if (isRestoringRef.current) {
@@ -58,38 +58,32 @@ export default function App() {
     }
     clearTimeout(historyDebounceRef.current);
     historyDebounceRef.current = setTimeout(() => {
-      const truncated = historyRef.current.slice(0, historyIndexRef.current + 1);
-      truncated.push({ nodes, cables });
-      historyRef.current = truncated;
-      historyIndexRef.current = truncated.length - 1;
-      setHistoryTick((t) => t + 1);
+      setHistory((h) => pushSnapshot(h, { nodes, cables }));
     }, 500);
     return () => clearTimeout(historyDebounceRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, cables]);
 
-  const canUndo = historyIndexRef.current > 0;
-  const canRedo = historyIndexRef.current < historyRef.current.length - 1;
+  const canUndo = stackCanUndo(history);
+  const canRedo = stackCanRedo(history);
 
   const handleUndo = () => {
     if (!canUndo) return;
-    historyIndexRef.current -= 1;
-    const snap = historyRef.current[historyIndexRef.current];
+    const next = stackUndo(history);
     isRestoringRef.current = true;
-    setNodes(snap.nodes);
-    setCables(snap.cables);
-    setHistoryTick((t) => t + 1);
+    setNodes(next.present.nodes as NetworkNode[]);
+    setCables(next.present.cables as CableConnection[]);
+    setHistory(next);
     showToast('Perubahan diurungkan.');
   };
 
   const handleRedo = () => {
     if (!canRedo) return;
-    historyIndexRef.current += 1;
-    const snap = historyRef.current[historyIndexRef.current];
+    const next = stackRedo(history);
     isRestoringRef.current = true;
-    setNodes(snap.nodes);
-    setCables(snap.cables);
-    setHistoryTick((t) => t + 1);
+    setNodes(next.present.nodes as NetworkNode[]);
+    setCables(next.present.cables as CableConnection[]);
+    setHistory(next);
     showToast('Perubahan diulangi.');
   };
 

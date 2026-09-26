@@ -1,26 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
-import {
-  Globe,
-  Radio,
-  Server,
-  Layers,
-  Box,
-  Share2,
-  Cpu,
-  Monitor,
-  Camera,
-  Smartphone,
-  Zap,
-  Power,
-  Trash2,
-  AlertCircle,
-  Activity,
-  CheckCircle2,
-  Move,
-  Cable as CableIcon,
-  Grid,
-  Tag,
-} from 'lucide-react';
+import { Globe, Radio, Server, Layers, Box, Share2, Cpu, Monitor, Camera, Smartphone, Zap, AlertCircle, Move, Cable as Grid, Tag } from 'lucide-react';
 import { NetworkNode, CableConnection, NodeCableType, SimulationPacket, ActiveTool, DiagnosticIssue } from '../types/network';
 import { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { CABLE_METADATA } from '../data/cableDefinitions';
@@ -597,7 +576,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
 
             // Smooth Bezier Curve calculation
             const dx = x2 - x1;
-            const dy = y2 - y1;
             const cx1 = x1 + dx * 0.45;
             const cy1 = y1;
             const cx2 = x2 - dx * 0.45;
