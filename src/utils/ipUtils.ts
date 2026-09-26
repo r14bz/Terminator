@@ -279,3 +279,35 @@ export function checkInternetAccess(
 
   return { hasInternet: true, gatewayNode: upstreamGateway };
 }
+
+/**
+ * The single address a node is reachable at, in preference order: the routed
+ * interface address, then the ONT's LAN address. TerminalModal matches incoming
+ * pings against this and the canvas ping tool fills it in, so both sides have
+ * to agree -- hence one function instead of two inline `||` chains.
+ */
+export function addressOf(node: {
+  ipConfig?: { ip?: string };
+  ontConfig?: { lanIp?: string };
+}): string | undefined {
+  return node.ipConfig?.ip || node.ontConfig?.lanIp;
+}
+
+/**
+ * Resolve a pinged address back to the node that owns it.
+ *
+ * Uses the same {@link addressOf} the ping tool fills its pre-filled command
+ * from, so the two can never disagree about what a node's address is. The
+ * 8.8.8.8 fallback stands in for the internet node, which owns no address of
+ * its own but is what a technician means by pinging "the outside".
+ */
+export function findNodeByAddress<
+  T extends { id: string; type: string; ipConfig?: { ip?: string }; ontConfig?: { lanIp?: string } },
+>(nodes: readonly T[], ip: string): T | undefined {
+  const owner = nodes.find((n) => addressOf(n) === ip);
+  if (owner) return owner;
+  if (ip === '8.8.8.8' || ip === '1.1.1.1') {
+    return nodes.find((n) => n.type === 'internet');
+  }
+  return undefined;
+}

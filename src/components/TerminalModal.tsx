@@ -1,62 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Terminal as TerminalIcon, CornerDownLeft, Trash2 } from 'lucide-react';
 import { NetworkNode } from '../types/network';
-import { isSameSubnet, isValidIpv4 } from '../utils/ipUtils';
+import { findNodeByAddress, isSameSubnet, isValidIpv4 } from '../utils/ipUtils';
 
-interface TerminalModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  node: NetworkNode | null;
-  nodes: NetworkNode[];
-}
+type TerminalLine = { text: string; type: 'cmd' | 'output' | 'error' };
 
-export const TerminalModal: React.FC<TerminalModalProps> = ({
-  isOpen,
-  onClose,
-  node,
-  nodes,
-}) => {
-  const [history, setHistory] = useState<Array<{ text: string; type: 'cmd' | 'output' | 'error' }>>([]);
-  const [inputVal, setInputVal] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isOpen && node) {
-      setHistory([
-        {
-          type: 'output',
-          text: node.type === 'mikrotik'
-            ? `  MikroTik RouterOS 7.15 (c) 1999-2026\n  Terminal Network Simulator Edition\n  Type 'help' or '/interface print' to start.`
-            : `Microsoft Windows [Version 10.0.19045.3803]\n(c) Microsoft Corporation. All rights reserved.\nKetik 'help' atau 'ipconfig' untuk diagnosa jaringan.`,
-        },
-      ]);
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [isOpen, node]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [history]);
-
-  if (!isOpen || !node) return null;
-
+/**
+ * Pure command interpreter: appends the echo of `cmd` plus its reply to
+ * `prior` and returns the new scrollback. Kept out of the component so the
+ * mount effect can replay a command without depending on `history` state.
+ */
+function replyTo(prior: TerminalLine[], cmd: string, node: NetworkNode, nodes: NetworkNode[]): TerminalLine[] {
   const isMikrotik = node.type === 'mikrotik';
+  const newHistory: TerminalLine[] = [...prior, { type: 'cmd', text: `${isMikrotik ? '[admin@MikroTik] > ' : 'C:\\Users\\Teknisi> '}${cmd}` }];
 
-  const handleCommand = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cmd = inputVal.trim();
-    if (!cmd) return;
-
-    const newHistory = [...history, { type: 'cmd' as const, text: `${isMikrotik ? '[admin@MikroTik] > ' : 'C:\\Users\\Teknisi> '}${cmd}` }];
-    setInputVal('');
-
+  {
     const parts = cmd.toLowerCase().split(/\s+/);
     const mainCmd = parts[0];
 
     if (mainCmd === 'clear' || mainCmd === 'cls') {
-      setHistory([]);
-      return;
+      return [];
     }
 
     if (mainCmd === 'help') {
@@ -104,9 +67,7 @@ Ethernet adapter Local Area Connection:
         const hostGateway = node.ipConfig?.gateway || '';
 
         // Find if target node exists with this IP
-        const targetNode = nodes.find(
-          (n) => n.ipConfig?.ip === targetIp || n.ontConfig?.lanIp === targetIp || (targetIp === '8.8.8.8' && nodes.some(x => x.type === 'internet'))
-        );
+        const targetNode = findNodeByAddress(nodes, targetIp);
 
         if (!node.poweredOn) {
           newHistory.push({ type: 'error', text: 'Koneksi gagal: Perangkat ini dalam keadaan mati (Power Off).' });
@@ -129,29 +90,25 @@ Ethernet adapter Local Area Connection:
                 type: 'error',
                 text: `\nPinging ${targetIp} with 32 bytes of data:\nReply from ${hostIp}: Destination host unreachable.\nReply from ${hostIp}: Destination host unreachable.\nReply from ${hostIp}: Destination host unreachable.\nReply from ${hostIp}: Destination host unreachable.\n\nPing statistics for ${targetIp}:\n    Packets: Sent = 4, Received = 0, Lost = 4 (100% loss).\n[Error]: Default Gateway KOSONG! Host tidak memiliki rute keluar untuk menjangkau ${targetIp}.`,
               });
-              setHistory(newHistory);
-              return;
+              return newHistory;
             } else if (!isGatewayReachable) {
               newHistory.push({
                 type: 'error',
                 text: `\nPinging ${targetIp} with 32 bytes of data:\nReply from ${hostIp}: Destination host unreachable.\nReply from ${hostIp}: Destination host unreachable.\nReply from ${hostIp}: Destination host unreachable.\nReply from ${hostIp}: Destination host unreachable.\n\nPing statistics for ${targetIp}:\n    Packets: Sent = 4, Received = 0, Lost = 4 (100% loss).\n[Error]: Gateway Salah! Host (${hostIp}) dan Default Gateway (${hostGateway}) berada di subnet berbeda.`,
               });
-              setHistory(newHistory);
-              return;
+              return newHistory;
             } else if (!gatewayNode) {
               newHistory.push({
                 type: 'error',
                 text: `\nPinging ${targetIp} with 32 bytes of data:\nRequest timed out.\nRequest timed out.\nRequest timed out.\nRequest timed out.\n\nPing statistics for ${targetIp}:\n    Packets: Sent = 4, Received = 0, Lost = 4 (100% loss).\n[Error]: Router Gateway (${hostGateway}) tidak merespon ARP / mati.`,
               });
-              setHistory(newHistory);
-              return;
+              return newHistory;
             } else if (gatewayNode.type === 'ont' && gatewayNode.ontConfig?.wanMode === 'bridge') {
               newHistory.push({
                 type: 'error',
                 text: `\nPinging ${targetIp} with 32 bytes of data:\nRequest timed out.\nRequest timed out.\nRequest timed out.\nRequest timed out.\n\nPing statistics for ${targetIp}:\n    Packets: Sent = 4, Received = 0, Lost = 4 (100% loss).\n[Error]: Gateway "${gatewayNode.name}" dalam Mode Bridge (Layer 2). Modem tidak memiliki fungsi routing/NAT untuk meneruskan paket ke luar! Diperlukan router (seperti MikroTik) untuk dial PPPoE.`,
               });
-              setHistory(newHistory);
-              return;
+              return newHistory;
             }
           }
 
@@ -216,7 +173,92 @@ Ethernet adapter Local Area Connection:
       });
     }
 
-    setHistory(newHistory);
+    return newHistory;
+  }
+}
+
+interface TerminalModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  node: NetworkNode | null;
+  nodes: NetworkNode[];
+  /**
+   * IP to ping as soon as the session opens. The canvas ping tool hands this
+   * over so that picking two nodes actually runs the test rather than leaving
+   * the user at a bare prompt with the target silently dropped.
+   */
+  pingTargetIp?: string | null;
+}
+
+export const TerminalModal: React.FC<TerminalModalProps> = ({
+  isOpen,
+  onClose,
+  node,
+  nodes,
+  pingTargetIp,
+}) => {
+  // Returning null unmounts the session, which is what clears scrollback and
+  // focus on the next open — so this check must stay above the session.
+  if (!isOpen || !node) return null;
+  return (
+    <TerminalSession
+      node={node}
+      nodes={nodes}
+      pingTargetIp={pingTargetIp ?? null}
+      onClose={onClose}
+    />
+  );
+};
+
+interface TerminalSessionProps {
+  node: NetworkNode;
+  nodes: NetworkNode[];
+  pingTargetIp: string | null;
+  onClose: () => void;
+};
+
+const TerminalSession: React.FC<TerminalSessionProps> = ({ node, nodes, pingTargetIp, onClose }) => {
+  const isMikrotik = node.type === 'mikrotik';
+  const [history, setHistory] = useState<TerminalLine[]>(() => [
+    {
+      type: 'output',
+      text: isMikrotik
+        ? `  MikroTik RouterOS 7.15 (c) 1999-2026\n  Terminal Network Simulator Edition\n  Type 'help' or '/interface print' to start.`
+        : `Microsoft Windows [Version 10.0.19045.3803]\n(c) Microsoft Corporation. All rights reserved.\nKetik 'help' atau 'ipconfig' untuk diagnosa jaringan.`,
+    },
+  ]);
+  const [inputVal, setInputVal] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const runCommand = (rawCmd: string) => {
+    const cmd = rawCmd.trim();
+    if (!cmd) return;
+    setInputVal('');
+    setHistory((prev) => replyTo(prev, cmd, node, nodes));
+  };
+
+  // Replay the canvas-picked target once per session. The session is remounted
+  // on every open, so an empty dependency list runs this exactly once.
+  const replayedRef = useRef(false);
+  useEffect(() => {
+    if (replayedRef.current) return;
+    replayedRef.current = true;
+    if (pingTargetIp) {
+      runCommand(isMikrotik ? `/ping ${pingTargetIp}` : `ping ${pingTargetIp}`);
+    }
+    const t = setTimeout(() => inputRef.current?.focus(), 100);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [history]);
+
+  const handleCommand = (e: React.FormEvent) => {
+    e.preventDefault();
+    runCommand(inputVal);
   };
 
   return (

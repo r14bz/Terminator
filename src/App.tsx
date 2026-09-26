@@ -17,6 +17,7 @@ import { DEVICE_METADATA } from './data/deviceDefinitions';
 import { DEVICE_BRANDS } from './data/deviceBrands';
 import { calculateOpticalPowers } from './utils/opticalCalculator';
 import { runNetworkDiagnostics } from './utils/diagnosticEngine';
+import { planPing } from './utils/pingTool';
 import { toPng } from 'html-to-image';
 
 // Templates are module-level singletons. Seeding state with them directly
@@ -144,6 +145,8 @@ export default function App() {
   const [isGlossaryOpen, setIsGlossaryOpen] = useState(false);
   const [isTemplateOpen, setIsTemplateOpen] = useState(false);
   const [terminalNodeId, setTerminalNodeId] = useState<string | null>(null);
+  // IP yang harus di-ping begitu terminal dibuka; null = terminal biasa.
+  const [terminalPingIp, setTerminalPingIp] = useState<string | null>(null);
   const [probedNodeId, setProbedNodeId] = useState<string | null>(null);
 
   // Toast notification
@@ -417,21 +420,17 @@ export default function App() {
 
   // Trigger ping test between two nodes
   const handleTriggerPing = (fromNodeId: string, toNodeId: string) => {
-    const fromNode = nodes.find((n) => n.id === fromNodeId);
-    const toNode = nodes.find((n) => n.id === toNodeId);
-    if (!fromNode || !toNode) return;
-
-    if (!fromNode.poweredOn) {
-      showToast(`Ping gagal: ${fromNode.name} dalam keadaan mati.`);
+    const plan = planPing(
+      nodes.find((n) => n.id === fromNodeId),
+      nodes.find((n) => n.id === toNodeId),
+    );
+    if (plan.kind === 'reject') {
+      showToast(plan.reason);
       return;
     }
-    if (!toNode.poweredOn) {
-      showToast(`Ping gagal: Target ${toNode.name} dalam keadaan mati.`);
-      return;
-    }
-
-    // Open terminal with simulated ping output
-    setTerminalNodeId(fromNodeId);
+    // Open the source terminal with the ping already running against the target.
+    setTerminalPingIp(plan.targetIp);
+    setTerminalNodeId(plan.sourceNodeId);
   };
 
   // Reset or clear canvas
@@ -572,7 +571,10 @@ export default function App() {
             onUpdateNode={handleUpdateNode}
             onDeleteNode={handleDeleteNode}
             opticalResult={opticalResults.get(selectedNode.id)}
-            onOpenTerminal={(nodeId) => setTerminalNodeId(nodeId)}
+            onOpenTerminal={(nodeId) => {
+              setTerminalPingIp(null);
+              setTerminalNodeId(nodeId);
+            }}
             connectedCables={cables.filter(
               (c) => c.fromNodeId === selectedNode.id || c.toNodeId === selectedNode.id
             )}
@@ -621,9 +623,13 @@ export default function App() {
       {/* Interactive Terminal CLI Modal */}
       <TerminalModal
         isOpen={Boolean(terminalNodeId)}
-        onClose={() => setTerminalNodeId(null)}
+        onClose={() => {
+          setTerminalNodeId(null);
+          setTerminalPingIp(null);
+        }}
         node={terminalNode}
         nodes={nodes}
+        pingTargetIp={terminalPingIp}
       />
 
       {/* Educational Glossary Modal */}
