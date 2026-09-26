@@ -286,7 +286,11 @@ export default function App() {
         ['pc', 'cctv', 'smartphone', 'iot', 'server', 'router'].includes(type)
           ? {
               mode: 'static',
-              ip: lanAddress ?? '192.168.1.100',
+              // `null` means the pool is exhausted. Left as a constant .100 it
+              // would collide with whatever already sits there, which is the
+              // exact conflict this allocator exists to avoid. An empty address
+              // is honest, and Check 6 reports it.
+              ip: lanAddress ?? '',
               subnet: lanSubnet,
               gateway: lanGatewayIp ?? '192.168.1.1',
               dns: '8.8.8.8',
@@ -297,6 +301,13 @@ export default function App() {
           : type === 'ont'
           ? {
               mode: 'static',
+              // Deliberate: an ONT's address is the gateway of its *own* LAN
+              // on its own PON leg, so two ONTs legitimately both answer to
+              // 192.168.1.1 on different broadcast domains. The duplicate
+              // warning is what is wrong there -- it needs one subnet per
+              // broadcast domain, which this single flat node list cannot
+              // express. Do not "fix" this by allocating: that would just
+              // hide the modelling gap behind unique-looking addresses.
               ip: '192.168.1.1',
               subnet: '255.255.255.0',
               gateway: '10.10.0.1',
@@ -308,9 +319,17 @@ export default function App() {
           : type === 'mikrotik'
           ? {
               mode: 'static',
-              ip: '192.168.88.1',
-              subnet: '255.255.255.0',
-              gateway: '202.134.0.1',
+              // A MikroTik added to a running LAN is a host on it, so it is
+              // allocated like any other member. This was a hardcoded
+              // 192.168.88.1 -- the exact address the MikroTik in the shipped
+              // SOHO template already holds, so every MikroTik added to that
+              // topology came up as a duplicate, was flagged as a conflict,
+              // and was reachable through nothing.
+              ip: allocateStaticHost(lanGateway, nodes) ?? '',
+              subnet: lanSubnet,
+              // The old hardcoded upstream 202.134.0.1 is only the fallback;
+              // when the LAN already has a gateway, that is the real one.
+              gateway: lanGatewayIp ?? '202.134.0.1',
               dns: '8.8.8.8',
               isDhcpServerEnabled: true,
             }

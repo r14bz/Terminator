@@ -23,9 +23,14 @@ APP_BAK=$(mktemp)
 cp "$APP" "$APP_BAK"
 INSPECTOR_BAK=$(mktemp)
 cp "$INSPECTOR" "$INSPECTOR_BAK"
-trap 'cp "$BAK" "$ALLOC"; cp "$DIAG_BAK" "$DIAG"; cp "$APP_BAK" "$APP"; cp "$INSPECTOR_BAK" "$INSPECTOR"; rm -f "$BAK" "$DIAG_BAK" "$APP_BAK" "$INSPECTOR_BAK"' EXIT
+# Mutasi 15 mematikan Cabang `??` di dalam file test itu sendiri, jadi test juga
+# harus ikut dikembalikan -- kalau tidak, baseline setelahnya merah dan semua
+# mutasi berikutnya terlihat "tertangkap" karena alasan yang salah.
+TEST_BAK=$(mktemp)
+cp "$TEST" "$TEST_BAK"
+trap 'cp "$BAK" "$ALLOC"; cp "$DIAG_BAK" "$DIAG"; cp "$APP_BAK" "$APP"; cp "$INSPECTOR_BAK" "$INSPECTOR"; cp "$TEST_BAK" "$TEST"; rm -f "$BAK" "$DIAG_BAK" "$APP_BAK" "$INSPECTOR_BAK" "$TEST_BAK"' EXIT
 
-restore() { cp "$BAK" "$ALLOC"; cp "$DIAG_BAK" "$DIAG"; cp "$APP_BAK" "$APP"; cp "$INSPECTOR_BAK" "$INSPECTOR"; }
+restore() { cp "$BAK" "$ALLOC"; cp "$DIAG_BAK" "$DIAG"; cp "$APP_BAK" "$APP"; cp "$INSPECTOR_BAK" "$INSPECTOR"; cp "$TEST_BAK" "$TEST"; }
 
 run() {
   local out
@@ -40,6 +45,14 @@ run() {
   fi
 }
 mutate() { restore; python3 -c "$1"; }
+
+# Bentuk kedua, untuk mutasi yang involves template literal dan regex: menulis
+# payload di dalam tanda kutip ganda shell yang lalu jadi argumen `python3 -c`
+# berarti tiga lapis escaping (shell, python, JS), dan satu lapis yang salah
+# diam-diam mengubah mutasi jadi no-op -- test hijau karena tidak ada yang
+# berubah, bukan karena tidak ada bug. Heredoc Berkeley abolishes that layer:
+# `<<'PYMUT'` tidak meng-expansi apa pun, dan nama file masuk lewat argv.
+mutate_py() { restore; python3 - "$ALLOC" "$DIAG" "$APP" "$INSPECTOR" "$TEST"; }
 
 pass=0; fail=0
 report() {
@@ -214,7 +227,8 @@ echo "$r" | grep -q "HIJAU" && report "konstanta .115 kembali ke UI" LOLOS || re
 
 mutate "
 p='$APP'; s=open(p,encoding='utf-8').read()
-s=s.replace('ip: lanAddress ?? \'192.168.1.100\',','ip: \`192.168.1.\\\${100 + countSameType}\`,')
+s=s.replace('const lanAddress = allocateStaticHost(lanGateway, nodes);',
+            'const lanAddress = \`192.168.1.\\\${100 + countSameType}\`;')
 open(p,'w',encoding='utf-8').write(s)
 "
 r=$(run); echo " 10. penomoran per-tipe dikembalikan ke handleAddDevice:"; echo "       $r"
@@ -252,6 +266,166 @@ u=u.replace(\"  const stripComments = (src) => src || src\", \"  const stripComm
 open(t,'w',encoding='utf-8').write(u)
 "
 echo "$r" | grep -q "HIJAU" && report "stripper komentar tidak memikul scan" LOLOS || report "stripper komentar tidak memikul scan" GAGAL
+
+# 13-14. Dua fallback yang lolos scan `||` di putaran lalu: `?? '192.168.1.100'`
+#        masih hidup di handleAddDevice (reachable saat pool DHCP penuh), dan
+#        URL RTSP kamera merender 192.168.1.50 untuk kamera yang belum punya
+#        alamat. Keduanya harus tertangkap sekarang.
+mutate "
+p='$APP'; s=open(p,encoding='utf-8').read()
+s=s.replace(\"ip: lanAddress ?? '',\", \"ip: lanAddress ?? '192.168.1.100',\")
+open(p,'w',encoding='utf-8').write(s)
+"
+r=$(run); echo " 13. fallback ?? '192.168.1.100' dikembalikan ke handleAddDevice:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "fallback ?? .100 kembali" LOLOS || report "fallback ?? .100 kembali" GAGAL
+
+mutate "
+p='$INSPECTOR'; s=open(p,encoding='utf-8').read()
+s=s.replace('? \`rtsp://\${node.ipConfig?.ip}:554/ch1/main\`','? \`rtsp://\${node.ipConfig?.ip || \\'192.168.1.50\\'}:554/ch1/main\`')
+open(p,'w',encoding='utf-8').write(s)
+"
+r=$(run); echo " 14. fallback 192.168.1.50 dikembalikan ke URL RTSP:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "fallback RTSP kembali" LOLOS || report "fallback RTSP kembali" GAGAL
+
+# 15. Matikan hanya-awareness `??` pada scan, tanpa mematikan `||`. Kalau test
+#     tetap hijau, keberanian `??` itu tidak pernah diuji dan mutasi 13 bisa
+#     lolos di masa depan.
+mutate "
+t='$TEST'; u=open(t,encoding='utf-8').read()
+u=u.replace('/(\\\\|\\\\||\\\\?\\\\?)\\\\s*\\'192\\\\.168\\\\.1\\\\.100\\'/', \"/\\\\|\\\\|\\\\s*'192\\\\.168\\\\.1\\\\.100'/\")
+open(t,'w',encoding='utf-8').write(u)
+p='$APP'; s=open(p,encoding='utf-8').read()
+s=s.replace(\"ip: lanAddress ?? '',\", \"ip: lanAddress ?? '192.168.1.100',\")
+open(p,'w',encoding='utf-8').write(s)
+"
+r=$(run); echo " 15. scan hanya ECA || saja, sementara bug pakai ?? :"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "scan buta terhadap ??" LOLOS || report "scan buta terhadap ??" GAGAL
+# 16. Konstanta .88.1 untuk MikroTik baru dikembalikan. Ini bug yang ditemukan
+#     lewat UI live, bukan lewat test: setiap MikroTik yang ditambah ke topologi
+#     SOHO langsung jadi duplikat dari MikroTik yang sudah ada di sana.
+mutate "
+p='$APP'; s=open(p,encoding='utf-8').read()
+s=s.replace(\"ip: allocateStaticHost(lanGateway, nodes) ?? '',\n              subnet: lanSubnet,\",\"ip: '192.168.88.1',\n              subnet: '255.255.255.0',\")
+open(p,'w',encoding='utf-8').write(s)
+"
+r=$(run); echo " 16. MikroTik baru dikasih konstanta 192.168.88.1 lagi:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "konstanta .88.1 untuk node baru" LOLOS || report "konstanta .88.1 untuk node baru" GAGAL
+
+# 17-19. allowlist yang bisa diperlebar sudah dihapus dari test, karena
+#        mutation 17 versi lalu membuktikan ia rubber stamp: satu entri baru
+#        membuat konstanta apa pun jadi legal. Sekarang tidak ada daftar yang
+#        bisa dilONGgarkan, hanya pengecualian tunggal yang dikunci ke cabang ONT.
+mutate "
+p='$APP'; s=open(p,encoding='utf-8').read()
+s=s.replace(\"ip: allocateStaticHost(lanGateway, nodes) ?? '',\\n              subnet: lanSubnet,\",\"ip: '192.168.88.2',\\n              subnet: lanSubnet,\")
+open(p,'w',encoding='utf-8').write(s)
+"
+r=$(run); echo " 17. MikroTik baru dikasih bare konstanta .88.2:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "bare konstanta lain" LOLOS || report "bare konstanta lain" GAGAL
+
+# 18. Smuggling: konstanta yang sah dipindah ke kunci alamat lain supaya lolos
+#     cek "assigned ip". Kalau ini hijau, pemeriksaan kunci baris tidak memikul
+#     apa pun.
+mutate "
+p='$APP'; s=open(p,encoding='utf-8').read()
+s=s.replace(\"              ip: '192.168.1.1',\\n              subnet: '255.255.255.0',\",\"              ip: '192.168.1.1',\\n              poolAnchor: '192.168.1.1',\\n              subnet: '255.255.255.0',\")
+open(p,'w',encoding='utf-8').write(s)
+"
+r=$(run); echo " 18. konstanta diselundupkan ke kunci address lain:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "smuggling lewat kunci lain" LOLOS || report "smuggling lewat kunci lain" GAGAL
+
+# 19. Pengecualian ONT-longgarkan dipakai lagi di luar cabang ONT, sebagai
+#     `ip:` kedua. Kalau ini hijau, pengecualiannya sudah bocor.
+mutate "
+p='$APP'; s=open(p,encoding='utf-8').read()
+s=s.replace(\"              subnet: lanSubnet,\\n              // The old hardcoded upstream\",\"              subnet: lanSubnet,\\n              spareAnchor: '192.168.1.1',\\n              // The old hardcoded upstream\")
+open(p,'w',encoding='utf-8').write(s)
+"
+r=$(run); echo " 19. literal exception ONT di luar cabang ONT:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "exception bocor keluar cabang" LOLOS || report "exception bocor keluar cabang" GAGAL
+# 20. Tombol "Perbaiki Otomatis" kamera dikembalikan ke alamat konstan .50.
+#     Ditemukan lewat UI live: kamera kedua yang diklik "Perbaiki Otomatis"
+#     ditumpuk persis di atas kamera pertama.
+mutate_py <<'PYMUT'
+import sys
+alloc, diag, app, insp, test = sys.argv[1:6]
+s = open(insp, encoding='utf-8').read()
+new = "ip: `${routerLanIp.replace(/\\.\\d+$/, '')}.50`,"
+assert "ip: fixed ?? ''," in s, "mutation 20 target missing"
+s = s.replace("ip: fixed ?? '',", new)
+open(insp, 'w', encoding='utf-8').write(s)
+PYMUT
+r=$(run); echo " 20. auto-fix kamera dikembalikan ke konstanta .50:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "auto-fix kamera konstan" LOLOS || report "auto-fix kamera konstan" GAGAL
+
+# 21. Lease dipaired lagi dengan gateway dari luar pasangan. Ini membuat
+#     kontradiksi config: klien di 192.168.1.100 dengan gateway 192.168.88.1,
+#     yang persis dilaporkan app sebagai "Gateway Salah" pada kartu yang baru
+#     saja dikonfigurasi user.
+mutate_py <<'PYMUT'
+import sys
+alloc, diag, app, insp, test = sys.argv[1:6]
+s = open(insp, encoding='utf-8').read()
+s = s.replace('const leaseDefaults = lanDefaultsFor(upstreamGateway);',
+              'const leaseDefaults = { subnet: routerSubnet, gateway: routerLanIp };')
+open(insp, 'w', encoding='utf-8').write(s)
+PYMUT
+r=$(run); echo " 21. lease dipaired dengan gateway dari luar pasangan:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "lease/gateway tidak dipasangkan" LOLOS || report "lease/gateway tidak dipasangkan" GAGAL
+
+# 22. Cek cross-subnet di dhcpPoolOf dibuang: gateway di 192.168.88.1 dengan
+#     pool 10.0.0.x akan memberi lease yang tidak bisa menjangkau gateway-nya,
+#     dan setiap lease tetap unik -- jadi duplicate check tidak akan melihatnya.
+mutate_py <<'PYMUT'
+import sys
+alloc, diag, app, insp, test = sys.argv[1:6]
+s = open(alloc, encoding='utf-8').read()
+target = '      if (!lanPrefix || lanPrefix !== startPrefix) return null;\n'
+assert target in s, "mutation 22 target missing"
+s = s.replace(target, '')
+open(alloc, 'w', encoding='utf-8').write(s)
+PYMUT
+r=$(run); echo " 22. cek pool cross-subnet di dhcpPoolOf dibuang:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "pool boleh menyeberang subnet" LOLOS || report "pool boleh menyeberang subnet" GAGAL
+
+# 23. Mask gateway dipaksa jadi /24, jadi LAN /16 yang dikonfigurasi user
+#     kembali sebagai /24 di kliennya.
+mutate_py <<'PYMUT'
+import sys
+alloc, diag, app, insp, test = sys.argv[1:6]
+s = open(alloc, encoding='utf-8').read()
+old = "    return { gateway: addr, subnet: isValidIpv4(subnet ?? '') ? (subnet as string) : '255.255.255.0' };"
+assert old in s, "mutation 23 target missing"
+s = s.replace(old, "    return { gateway: addr, subnet: '255.255.255.0' };")
+open(alloc, 'w', encoding='utf-8').write(s)
+PYMUT
+r=$(run); echo " 23. subnet gateway dipaksa jadi /24:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "subnet gateway ditimpa" LOLOS || report "subnet gateway ditimpa" GAGAL
+
+# 24. Mask yang tidak valid diteruskan apa adanya, jadi klien dapat "bukan-mask".
+mutate_py <<'PYMUT'
+import sys
+alloc, diag, app, insp, test = sys.argv[1:6]
+s = open(alloc, encoding='utf-8').read()
+s = s.replace("subnet: isValidIpv4(subnet ?? '') ? (subnet as string) : '255.255.255.0'",
+              "subnet: subnet ?? '255.255.255.0'")
+open(alloc, 'w', encoding='utf-8').write(s)
+PYMUT
+r=$(run); echo " 24. mask tidak valid diteruskan tanpa cek:"
+echo "       $r"
+echo "$r" | grep -q "HIJAU" && report "mask junk diteruskan" LOLOS || report "mask junk diteruskan" GAGAL
+restore
 
 echo
 echo "=== hasil: $pass tertangkap, $fail lolos ==="

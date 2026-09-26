@@ -105,6 +105,14 @@ export function dhcpPoolOf(gateway: NetworkNode | null | undefined): AddressPool
     const startPrefix = prefixOf(explicit.start);
     const endPrefix = prefixOf(explicit.end);
     if (startPrefix && startPrefix === endPrefix) {
+      // The range has to sit on the LAN this gateway actually serves. A pool on
+      // another subnet hands out addresses no client can reach the gateway
+      // through, and the config is then wrong in a way the duplicate check
+      // cannot see: every lease is unique.
+      const lan = addressOf(gateway);
+      const lanPrefix = lan ? prefixOf(lan) : null;
+      if (!lanPrefix || lanPrefix !== startPrefix) return null;
+
       const start = hostOf(explicit.start);
       const end = hostOf(explicit.end);
       // An inverted or out-of-byte range is a config typo, not a licence to
@@ -172,6 +180,29 @@ export function primaryGateway(nodes: readonly NetworkNode[]): NetworkNode | nul
 
 /** Used when the topology has no gateway at all yet. */
 export const FALLBACK_LAN: AddressPool = { prefix: '192.168.1.', start: 100, end: 254 };
+
+/** The router address implied by FALLBACK_LAN. */
+export const FALLBACK_LAN_GATEWAY = '192.168.1.1';
+
+/**
+ * The subnet and default gateway a client should be handed, as a pair.
+ *
+ * The two have to be decided together. A device with no reachable gateway gets
+ * a lease out of FALLBACK_LAN, and pairing that with a gateway from somewhere
+ * else produced a client on 192.168.1.100 whose default gateway was
+ * 192.168.88.1 -- a configuration that is internally contradictory, which the
+ * app then reported as "Gateway Salah" on a card the user had just configured.
+ */
+export function lanDefaultsFor(
+  gateway: NetworkNode | null | undefined,
+): { gateway: string; subnet: string } {
+  const addr = gatewayAddressOf(gateway);
+  if (addr) {
+    const subnet = gateway?.ipConfig?.subnet || gateway?.ontConfig?.lanSubnet;
+    return { gateway: addr, subnet: isValidIpv4(subnet ?? '') ? (subnet as string) : '255.255.255.0' };
+  }
+  return { gateway: FALLBACK_LAN_GATEWAY, subnet: '255.255.255.0' };
+}
 
 /**
  * A free static address on `gateway`'s LAN, for a device added by hand.

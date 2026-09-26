@@ -30,8 +30,9 @@ import { readFileSync } from 'node:fs';
 import { TOPOLOGY_TEMPLATES } from '../src/data/templates.ts';
 import { runNetworkDiagnostics } from '../src/utils/diagnosticEngine.ts';
 import {
-  FALLBACK_LAN, allocateDhcpLease, allocateStaticHost, dhcpPoolOf,
-  firstFreeHost, gatewayAddressOf, primaryGateway, usedAddresses,
+  FALLBACK_LAN, FALLBACK_LAN_GATEWAY, allocateDhcpLease, allocateStaticHost,
+  dhcpPoolOf, firstFreeHost, gatewayAddressOf, lanDefaultsFor,
+  primaryGateway, usedAddresses,
 } from '../src/utils/ipAlloc.ts';
 import { isValidIpv4 } from '../src/utils/ipUtils.ts';
 
@@ -286,10 +287,114 @@ for (const t of TOPOLOGY_TEMPLATES) {
     ok(`${name}: no hardcoded .115 lease`, !/\.115[`'"\s,)]/.test(src));
     // `192.168.1.${100 + countSameType}`, the per-type numbering.
     ok(`${name}: no "100 + countSameType" numbering`, !/100\s*\+\s*countSameType/.test(src));
-    // The display fallbacks: an empty lease used to render as a real address.
-    ok(`${name}: no "192.168.1.100" fallback in a display`, !/\|\|\s*'192\.168\.1\.100'/.test(src));
+    // Display fallbacks. `||` and `??` both hide a missing value behind a
+    // plausible address; the ?.100 one survived a scan that only knew about
+    // `||`, which is why both are checked.
+    ok(`${name}: no 192.168.1.100 fallback behind || or ??`,
+      !/(\|\||\?\?)\s*'192\.168\.1\.100'/.test(src));
     ok(`${name}: no "? 192.168.88.1" default for a missing address`, !/\?\?\s*'192\.168\.88\.1'/.test(src));
+    // The camera stream URL rendered a camera address the camera does not have.
+    ok(`${name}: no 192.168.1.50 fallback in the RTSP URL`,
+      !/(\|\||\?\?)\s*'192\.168\.1\.50'/.test(src));
+    // handleAddDevice gave a brand-new MikroTik the constant 192.168.88.1 --
+    // the address the MikroTik in the shipped SOHO template already holds, so
+    // every MikroTik added there was a duplicate the moment it appeared.
+    ok(`${name}: no node is created with a hardcoded 192.168.88.1`,
+      !/\bip:\s*'192\.168\.88\.1'/.test(src));
+    // The camera "Perbaiki Otomatis" button built an address out of a constant
+    // host: `${routerLanIp.replace(/\.\d+$/, '')}.50`. Pressing it on a second
+    // camera stacked it on the first.
+    ok(`${name}: no address built from a constant host suffix`,
+      !/`\$\{[^}]*replace\([^)]*\)\}\.\d+`/.test(src));
+    // Lease and gateway must be decided together, never one from `routerLanIp`
+    // while the other came from the allocator.
+    ok(`${name}: no lease paired with an independent gateway lookup`,
+      !/allocateDhcpLease[\s\S]{0,400}?\b(gatewayAddressOf|routerLanIp)\b/.test(src));
   }
+
+  // Every address assigned to a node in these two files is either computed,
+  // empty, or the one deliberate LAN gateway below. There is deliberately no
+  // allowlist to widen: a list of acceptable constants is a rubber stamp, and
+  // mutation 17 of scripts/mutate-ipalloc.sh proves it -- adding one entry
+  // makes any new constant legal.
+  //
+  // The single exception is the ONT's `192.168.1.1`. An ONT is the gateway of
+  // its own LAN on its own PON leg, so two ONTs legitimately share it on
+  // different broadcast domains; the duplicate warning is what is wrong there,
+  // and that needs one subnet per broadcast domain rather than a unique-looking
+  // address. It is pinned to the ONT branch and to a count of one, so a second
+  // constant anywhere else fails.
+  {
+    const ONT_LAN_GATEWAY = "'192.168.1.1'";
+
+    for (const rel of ['../src/App.tsx', '../src/components/NodeInspector.tsx']) {
+      const name = rel.split('/').pop();
+      const src = stripComments(readFileSync(new URL(rel, import.meta.url), 'utf8'));
+
+      // `\bip:` cannot match `lanIp:` or `staticIp:` -- the boundary needs a
+      // non-word character before `ip`, and those prefixes end in a word char.
+      const bare = [...src.matchAll(/\bip:\s*([^,\n}]+)/g)]
+        .map((m) => m[1].trim())
+        .filter((v) => v.startsWith("'") || v.startsWith('"'));
+
+      for (const value of bare) {
+        ok(`${name}: assigned ip ${value} is the ONT LAN gateway or computed`,
+          value === ONT_LAN_GATEWAY, value);
+      }
+
+      // Nothing may name a host address inside a template literal either.
+      const inTemplate = [...src.matchAll(/`[^`]*`/g)]
+        .map((m) => m[0])
+        .filter((t) => /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/.test(t));
+      ok(`${name}: no template literal hardcodes a full address`, inTemplate.length === 0,
+        inTemplate.slice(0, 2).join(' | '));
+
+      if (name === 'App.tsx') {
+        // The literal also appears as a `gateway:` default and as the ONT's
+        // `ontConfig.lanIp`. Those are route hints and configuration defaults,
+        // not an address being handed to a new node, so the exception is
+        // scoped by the key on the line rather than by counting occurrences.
+        const lines = src.split('\n');
+        const asIpKey = lines
+          .map((l, i) => ({ i: i + 1, l }))
+          .filter(({ l }) => new RegExp(`\\bip:\\s*${ONT_LAN_GATEWAY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(l));
+
+        ok('App.tsx: exactly one `ip:` assignment uses the ONT gateway literal',
+          asIpKey.length === 1, `${asIpKey.length} di baris ${asIpKey.map((x) => x.i).join(', ')}`);
+
+        // Any other key may not smuggle the literal into an address field.
+        const smuggled = lines
+          .map((l, i) => ({ i: i + 1, l }))
+          .filter(({ l }) => l.includes(ONT_LAN_GATEWAY) && !/\bip:/.test(l))
+          .filter(({ l }) => !/\b(gateway|lanIp|dhcpPoolStart|dhcpPoolEnd|dhcpRangeStart|dhcpRangeEnd):/.test(l));
+        ok('App.tsx: the literal never appears under another address key',
+          smuggled.length === 0, smuggled.slice(0, 3).map((x) => `${x.i}:${x.l.trim()}`).join(' | '));
+
+        const line = asIpKey[0];
+        ok('App.tsx: the assignment sits in the ONT branch',
+          Boolean(line) && /type === 'ont'/.test(src.slice(0, src.indexOf(line.l))),
+          line ? `baris ${line.i}` : '(tidak ada)');
+      }
+    }
+  }
+
+  // The four checks above only mean something if the shape they look for is the
+  // shape the bug had. Assert the patterns still match the removed code.
+  ok('the .100 pattern still matches how the bug was written',
+    /(\|\||\?\?)\s*'192\.168\.1\.100'/.test("ip: lanAddress ?? '192.168.1.100',"));
+  ok('the .50 pattern still matches how the RTSP bug was written',
+    /(\|\||\?\?)\s*'192\.168\.1\.50'/.test("`rtsp://${node.ipConfig?.ip || '192.168.1.50'}:554`"));
+  ok('and does not match an honest empty string',
+    !/(\|\||\?\?)\s*'192\.168\.1\.100'/.test("ip: lanAddress ?? '',"));
+  // The same guard for the two newest patterns.
+  ok('the constant-suffix pattern still matches the camera auto-fix bug',
+    /`\$\{[^}]*replace\([^)]*\)\}\.\d+`/.test("ip: `${routerLanIp.replace(/\\.\\d+$/, '')}.50`,"));
+  ok('the pairing pattern still matches a lease joined to an unrelated gateway',
+    /allocateDhcpLease[\s\S]{0,400}?\b(gatewayAddressOf|routerLanIp)\b/.test(
+      'const lease = allocateDhcpLease(gw, nodes);\nconst g = gatewayAddressOf(gw) || routerLanIp;'));
+  ok('and does not match a lease paired through lanDefaultsFor',
+    !/allocateDhcpLease[\s\S]{0,400}?\b(gatewayAddressOf|routerLanIp)\b/.test(
+      'const lease = allocateDhcpLease(gw, nodes);\nconst d = lanDefaultsFor(gw);'));
 
   // Guard the guard: the stripper must actually strip, or the four checks above
   // would pass on a file full of comments.
@@ -297,6 +402,96 @@ for (const t of TOPOLOGY_TEMPLATES) {
     !/\.115/.test(stripComments('const a = 1; // used to be .115\n')));
   ok('and leaves a live constant alone',
     /\.115/.test(stripComments('const a = ".115";\n')));
+}
+
+// ------------------------------------------- the pool must serve its own LAN
+
+{
+  // A DHCP range on a different subnet than the gateway's own address hands out
+  // leases no client can reach the gateway through. Every lease is unique, so
+  // the duplicate check sees nothing wrong -- the only signal is this one.
+  const gw = gateway('192.168.88.1', {
+    ipConfig: {
+      mode: 'static', ip: '192.168.88.1', subnet: '255.255.255.0',
+      isDhcpServerEnabled: true, dhcpRangeStart: '10.0.0.10', dhcpRangeEnd: '10.0.0.200',
+    },
+  });
+  eq('a pool on another subnet is refused', dhcpPoolOf(gw), null);
+  eq('and therefore no lease is handed out from it', allocateDhcpLease(gw, [gw]), null);
+
+  const sameSubnet = gateway('192.168.88.1', {
+    ipConfig: {
+      mode: 'static', ip: '192.168.88.1', subnet: '255.255.255.0',
+      isDhcpServerEnabled: true, dhcpRangeStart: '192.168.88.100', dhcpRangeEnd: '192.168.88.200',
+    },
+  });
+  eq('a pool on the gateway\'s own subnet is accepted',
+    dhcpPoolOf(sameSubnet), { prefix: '192.168.88.', start: 100, end: 200 });
+
+  // The gateway's address is the pool's first host. A lease that equals it
+  // would make the client its own gateway, which is the other half of the
+  // original bug.
+  const selfLeased = gateway('192.168.88.100', {
+    ipConfig: {
+      mode: 'static', ip: '192.168.88.100', subnet: '255.255.255.0',
+      isDhcpServerEnabled: true, dhcpRangeStart: '192.168.88.100', dhcpRangeEnd: '192.168.88.200',
+    },
+  });
+  const selfLease = allocateDhcpLease(selfLeased, [selfLeased]);
+  ok('a lease never lands on the gateway\'s own address', selfLease !== '192.168.88.100', selfLease);
+}
+
+// ------------------------------------------- lease and gateway as one pair
+
+{
+  const three = (ip) => ip.split('.').slice(0, 3).join('.');
+
+  // The invariant that matters: whatever lease the allocator hands out, the
+  // default gateway written beside it has to be in the same subnet. Getting
+  // these from two different places is what produced a client on 192.168.1.100
+  // whose gateway was 192.168.88.1 -- which the app then flagged as
+  // "Gateway Salah" on a card the user had just configured.
+  const cases = [
+    { label: 'router at 192.168.88.1', gw: gateway('192.168.88.1'), nodes: [] },
+    { label: 'router at 10.20.30.1', gw: gateway('10.20.30.1'), nodes: [] },
+    { label: 'router with a /16 mask', gw: node({ type: 'router', ipConfig: { mode: 'static', ip: '172.16.0.1', subnet: '255.255.0.0', isDhcpServerEnabled: true } }), nodes: [] },
+    { label: 'router whose pool is already full', gw: gateway('192.168.88.1'), nodes: Array.from({ length: 155 }, (_, i) => withIp(`192.168.88.${100 + i}`)) },
+    { label: 'no gateway at all', gw: null, nodes: [] },
+    { label: 'no gateway, fallback pool partly taken', gw: null, nodes: [withIp('192.168.1.100'), withIp('192.168.1.101')] },
+  ];
+
+  for (const { label, gw, nodes } of cases) {
+    const d = lanDefaultsFor(gw);
+    eq(`${label}: the pair names a valid gateway`, isValidIpv4(d.gateway), true);
+    eq(`${label}: the pair names a valid mask`, isValidIpv4(d.subnet), true);
+
+    const lease = allocateDhcpLease(gw, nodes);
+    if (lease) {
+      eq(`${label}: the lease ${lease} is in the gateway's subnet`,
+        three(lease), three(d.gateway));
+      ok(`${label}: the lease is not the gateway itself`, lease !== d.gateway, `${lease} == ${d.gateway}`);
+    }
+    // With no lease there is no address to contradict, so nothing more to
+    // check here: a real gateway with an exhausted pool still reports itself,
+    // which is coherent, and the no-gateway case is pinned separately below.
+  }
+
+  // The gateway's own mask is kept: a /16 LAN configured on the gateway should
+  // not come back as a /24 on its clients.
+  const wide = node({ type: 'router', ipConfig: { mode: 'static', ip: '172.16.0.1', subnet: '255.255.0.0', isDhcpServerEnabled: true } });
+  eq('a /16 gateway keeps its /16 mask', lanDefaultsFor(wide).subnet, '255.255.0.0');
+
+  // A gateway with no usable mask falls back rather than propagating junk.
+  const noMask = node({ type: 'router', ipConfig: { mode: 'static', ip: '172.20.0.1', subnet: 'bukan-mask', isDhcpServerEnabled: true } });
+  eq('an unusable mask falls back to /24', lanDefaultsFor(noMask).subnet, '255.255.255.0');
+
+  // With no gateway, both halves come from FALLBACK_LAN -- which is the whole
+  // point of the pair.
+  const none = lanDefaultsFor(null);
+  eq('no gateway: the address is the fallback LAN gateway', none.gateway, FALLBACK_LAN_GATEWAY);
+  eq('no gateway: the mask is /24', none.subnet, '255.255.255.0');
+  ok('and the fallback gateway is inside the fallback pool',
+    FALLBACK_LAN_GATEWAY.startsWith(FALLBACK_LAN.prefix), FALLBACK_LAN_GATEWAY);
 }
 
 console.log(`ok — ${n} assertions passed`);

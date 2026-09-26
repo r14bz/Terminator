@@ -5,7 +5,7 @@ import { DEVICE_METADATA } from '../data/deviceDefinitions';
 import { DEVICE_BRANDS } from '../data/deviceBrands';
 import type { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { findUpstreamGateway, isSameSubnet, isValidIpv4, checkInternetAccess } from '../utils/ipUtils';
-import { allocateDhcpLease, allocateStaticHost, gatewayAddressOf } from '../utils/ipAlloc';
+import { allocateDhcpLease, allocateStaticHost, lanDefaultsFor } from '../utils/ipAlloc';
 
 interface NodeInspectorProps {
   node: NetworkNode;
@@ -1185,13 +1185,21 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     {upstreamGateway && upstreamGateway.ontConfig?.wanMode !== 'bridge' && (
                       <button
                         onClick={() => {
+                          // The button only appears when the camera is on the
+                          // wrong subnet, so its current address is unusable
+                          // and there is nothing to preserve. A free host on
+                          // the router's LAN is the fix; the constant .50 was
+                          // not, and put a second camera on top of the first
+                          // one every time it was pressed.
+                          const fixed = allocateStaticHost(upstreamGateway, allNodes);
+                          const defaults = lanDefaultsFor(upstreamGateway);
                           onUpdateNode({
                             ...node,
                             ipConfig: {
                               mode: 'static',
-                              ip: `${routerLanIp.replace(/\.\d+$/, '')}.50`,
-                              subnet: routerSubnet,
-                              gateway: routerLanIp,
+                              ip: fixed ?? '',
+                              subnet: defaults.subnet,
+                              gateway: defaults.gateway,
                               dns: '8.8.8.8',
                             },
                           });
@@ -1208,7 +1216,15 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   <label className="text-[10px] text-slate-500 font-medium">RTSP Video Stream URL:</label>
                   <input
                     type="text"
-                    value={`rtsp://${node.ipConfig?.ip || '192.168.1.50'}:554/ch1/main`}
+                    // A camera with no address has no stream. This used to
+                    // render 192.168.1.50 into the box, so an unconfigured
+                    // camera showed a copy-pasteable URL for a host that does
+                    // not exist.
+                    value={
+                      isValidIpv4(node.ipConfig?.ip ?? '')
+                        ? `rtsp://${node.ipConfig?.ip}:554/ch1/main`
+                        : 'rtsp://(kamera belum punya alamat IP):554/ch1/main'
+                    }
                     readOnly
                     className="w-full rounded border border-slate-200 bg-white px-2 py-1 font-mono text-[11px] text-slate-700"
                   />
@@ -1244,7 +1260,11 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   </span>
                   <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-md">
                     <button
-                      onClick={() =>
+                      onClick={() => {
+                        // Subnet and gateway come as a pair for the same reason
+                        // as the DHCP toggle: mixing a lease from one LAN with a
+                        // gateway from another is a contradiction, not a config.
+                        const defaults = lanDefaultsFor(upstreamGateway);
                         onUpdateNode({
                           ...node,
                           ipConfig: {
@@ -1257,12 +1277,12 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                               node.ipConfig?.ip ||
                               allocateStaticHost(upstreamGateway, allNodes) ||
                               '',
-                            subnet: node.ipConfig?.subnet || routerSubnet || '255.255.255.0',
-                            gateway: node.ipConfig?.gateway || routerLanIp || '192.168.1.1',
+                            subnet: node.ipConfig?.subnet || defaults.subnet,
+                            gateway: node.ipConfig?.gateway || defaults.gateway,
                             dns: node.ipConfig?.dns || '8.8.8.8',
                           },
-                        })
-                      }
+                        });
+                      }}
                       className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
                         (node.ipConfig?.mode ?? 'static') === 'static'
                           ? 'bg-white text-slate-900 shadow-2xs font-bold'
@@ -1284,14 +1304,18 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                         // leaves the address empty rather than inventing one;
                         // the APIPA panel below already covers that state.
                         const lease = allocateDhcpLease(upstreamGateway, allNodes, node.id);
-                        const leaseGateway = gatewayAddressOf(upstreamGateway) || routerLanIp;
+                        // Decided as a pair. Taking the gateway from
+                        // `routerLanIp` while the lease came from a different
+                        // LAN produced a client whose default gateway was
+                        // unreachable by construction.
+                        const leaseDefaults = lanDefaultsFor(upstreamGateway);
                         onUpdateNode({
                           ...node,
                           ipConfig: {
                             mode: 'dhcp',
                             ip: lease ?? '',
-                            subnet: routerSubnet || '255.255.255.0',
-                            gateway: leaseGateway,
+                            subnet: leaseDefaults.subnet,
+                            gateway: leaseDefaults.gateway,
                             dns: '8.8.8.8',
                           },
                         });
