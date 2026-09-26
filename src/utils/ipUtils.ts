@@ -81,8 +81,8 @@ export function isSameSubnet(ip1: string, ip2: string, mask: string = '255.255.2
  */
 export function findUpstreamGateway(
   startNode: NetworkNode,
-  allNodes: NetworkNode[],
-  allCables: CableConnection[]
+  allNodes: readonly NetworkNode[],
+  allCables: readonly CableConnection[]
 ): NetworkNode | null {
   const visited = new Set<string>();
   const queue: string[] = [startNode.id];
@@ -134,8 +134,8 @@ export interface InternetAccessStatus {
  */
 export function checkInternetAccess(
   node: NetworkNode,
-  allNodes: NetworkNode[],
-  allCables: CableConnection[]
+  allNodes: readonly NetworkNode[],
+  allCables: readonly CableConnection[]
 ): InternetAccessStatus {
   if (!node.poweredOn) {
     return { hasInternet: false, reason: 'Perangkat dalam keadaan mati (Power Off).' };

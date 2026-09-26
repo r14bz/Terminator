@@ -1,9 +1,9 @@
-import React, { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import { Globe, Radio, Server, Layers, Box, Share2, Cpu, Monitor, Camera, Smartphone, Zap, AlertCircle, Move, Cable as Grid, Tag } from 'lucide-react';
-import { NetworkNode, CableConnection, NodeCableType, SimulationPacket, ActiveTool, DiagnosticIssue } from '../types/network';
-import { OpticalCalculationResult } from '../utils/opticalCalculator';
+import type { NetworkNode, CableConnection, NodeCableType, SimulationPacket, ActiveTool, DiagnosticIssue } from '../types/network';
+import type { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { CABLE_METADATA } from '../data/cableDefinitions';
-import { checkInternetAccess } from '../utils/ipUtils';
+import { buildInternetAccessMap } from '../utils/internetAccessMap';
 import { boundsOf, clampZoom, computeFitView } from '../utils/zoom';
 import { CARD_MIN_HEIGHT, CARD_WIDTH } from '../utils/nodePlacement';
 
@@ -152,6 +152,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedCableId, selectedNodeId, onDeleteCable, onDeleteNode]);
 
+  // Reachability depends only on the topology, so it is computed once per
+  // change instead of per node per render and twice per cable per 100ms tick.
+  const internetAccess = useMemo(() => buildInternetAccessMap(nodes, cables), [nodes, cables]);
+
   // Simulation loop for packets when running
   useEffect(() => {
     if (!isRunning) return;
@@ -164,8 +168,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
           const toNode = nodes.find((n) => n.id === randomCable.toNodeId);
 
           if (fromNode && toNode) {
-            const fromNet = checkInternetAccess(fromNode, nodes, cables);
-            const toNet = checkInternetAccess(toNode, nodes, cables);
+            const fromNet = internetAccess.get(fromNode.id);
+            const toNet = internetAccess.get(toNode.id);
 
             const hasCriticalIssue =
               !fromNode.poweredOn ||
@@ -209,7 +213,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isRunning, cables, nodes, issues]);
+  }, [isRunning, cables, nodes, issues, internetAccess]);
 
   // Native wheel handler: Scroll pans the canvas; ONLY Ctrl+Scroll or Trackpad Pinch zooms!
   useEffect(() => {
@@ -736,7 +740,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
           const isOpticalLos = optResult?.status === 'critical_los';
           const isPowerOff = !node.poweredOn;
 
-          const netAccess = checkInternetAccess(node, nodes, cables);
+          const netAccess = internetAccess.get(node.id);
           const isClientDevice = ['pc', 'cctv', 'smartphone', 'iot', 'server'].includes(node.type);
           const hasInternetIssue = isClientDevice && !netAccess.hasInternet && node.poweredOn;
           const isOntBridge = node.type === 'ont' && node.ontConfig?.wanMode === 'bridge';
