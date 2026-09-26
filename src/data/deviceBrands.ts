@@ -1,11 +1,18 @@
-import { DeviceType } from '../types/network';
+import type { NodeType } from '../types/network';
 
 export interface DeviceBrandModel {
   brand: string;
   models: string[];
 }
 
-export const DEVICE_BRANDS: Record<string, DeviceBrandModel[]> = {
+/**
+ * Brand/model catalog per device type. Deliberately Partial: only the types a
+ * technician would actually shop for are listed (ont, olt, mikrotik, switch,
+ * router, cctv, htb, pc). The remaining NodeTypes — internet, metro, odc, odp,
+ * splitter, mesh, smartphone, iot, server — have no brand to pick, which is why
+ * callers fall back to the generic model name.
+ */
+export const DEVICE_BRANDS: Partial<Record<NodeType, DeviceBrandModel[]>> = {
   ont: [
     {
       brand: 'ZTE',
