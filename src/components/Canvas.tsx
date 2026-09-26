@@ -1,720 +1,1017 @@
-import React, { useRef, useState, useEffect, forwardRef, useImperativeHandle, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import {
-  NetworkDevice,
-  NetworkLink,
-  PortConfig,
-  CableType,
-  PacketAnimation,
-  TrafficGeneratorStream,
-} from '../types/network';
-import { CABLE_CATALOG } from '../constants/cableCatalog';
-import { DEVICE_TEMPLATES } from '../constants/deviceCatalog';
-import { ActiveTool } from './Toolbar';
-import { calculateLinkCongestion, LinkCongestionMetrics } from '../utils/trafficEngine';
-import { calculateDeviceOpticalPower } from '../utils/networkEngine';
-import {
-  Monitor,
-  Laptop,
-  Server,
-  Smartphone,
-  Printer,
-  Network,
-  Boxes,
-  Waypoints,
-  Cpu,
-  Zap,
-  Split,
+  Globe,
   Radio,
-  Camera,
-  Wifi,
+  Server,
+  Layers,
+  Box,
   Share2,
-  Cloud,
-  ZoomIn,
-  ZoomOut,
-  Maximize2,
-  Move,
+  Cpu,
+  Monitor,
+  Camera,
+  Smartphone,
+  Zap,
+  Power,
   Trash2,
-  Settings,
-  Flame,
-  AlertTriangle,
+  AlertCircle,
+  Activity,
+  CheckCircle2,
+  Move,
+  Cable as CableIcon,
+  Grid,
+  Tag,
 } from 'lucide-react';
+import { NetworkNode, CableConnection, CableType, SimulationPacket, ActiveTool, DiagnosticIssue } from '../types/network';
+import { OpticalCalculationResult } from '../utils/opticalCalculator';
+import { CABLE_METADATA } from '../data/cableDefinitions';
+import { checkInternetAccess } from '../utils/ipUtils';
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  Monitor,
-  Laptop,
-  Server,
-  Smartphone,
-  Printer,
-  Network,
-  Boxes,
-  Waypoints,
-  Cpu,
-  Zap,
-  Split,
-  Radio,
-  Camera,
-  Wifi,
-  Share2,
-  Cloud,
-};
+interface CanvasProps {
+  nodes: NetworkNode[];
+  cables: CableConnection[];
+  opticalResults: Map<string, OpticalCalculationResult>;
+  selectedNodeId: string | null;
+  onSelectNode: (nodeId: string | null) => void;
+  onUpdateNodePosition: (nodeId: string, x: number, y: number) => void;
+  activeTool: ActiveTool;
+  selectedCableType: CableType;
+  onConnectNodes: (fromNodeId: string, toNodeId: string, cableType: CableType) => void;
+  onSelectCable: (cableId: string) => void;
+  selectedCableId: string | null;
+  onDeleteCable: (cableId: string) => void;
+  onDeleteNode: (nodeId: string) => void;
+  onProbeOpm: (nodeId: string) => void;
+  onTriggerPing: (fromNodeId: string, toNodeId: string) => void;
+  zoomLevel: number;
+  onSetZoomLevel: (zoom: number) => void;
+  isRunning: boolean;
+  connectingSourceNodeId: string | null;
+  setConnectingSourceNodeId: (id: string | null) => void;
+  pingSourceNodeId: string | null;
+  setPingSourceNodeId: (id: string | null) => void;
+  issues?: DiagnosticIssue[];
+}
 
 export interface CanvasHandle {
   fitView: () => void;
 }
 
-interface CanvasProps {
-  devices: NetworkDevice[];
-  links: NetworkLink[];
-  selectedDeviceId: string | null;
-  selectedLinkId: string | null;
-  activeTool: ActiveTool;
-  isConnecting: boolean;
-  connectingSourceId: string | null;
-  packetAnimations: PacketAnimation[];
-  activeStreams?: TrafficGeneratorStream[];
-  onSelectDevice: (id: string | null) => void;
-  onSelectLink: (id: string | null) => void;
-  onDeviceMove: (id: string, x: number, y: number) => void;
-  onDeviceMoveEnd?: (id: string, x: number, y: number, initialX: number, initialY: number) => void;
-  onDeviceDoubleClick: (device: NetworkDevice) => void;
-  onDeviceClickWithTool: (device: NetworkDevice) => void;
-  onDeleteSelected: () => void;
-  onDropNewDevice: (type: string, x: number, y: number) => void;
-}
-
 export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
-  devices,
-  links,
-  selectedDeviceId,
-  selectedLinkId,
+  nodes,
+  cables,
+  opticalResults,
+  selectedNodeId,
+  onSelectNode,
+  onUpdateNodePosition,
   activeTool,
-  isConnecting,
-  connectingSourceId,
-  packetAnimations,
-  activeStreams = [],
-  onSelectDevice,
-  onSelectLink,
-  onDeviceMove,
-  onDeviceMoveEnd,
-  onDeviceDoubleClick,
-  onDeviceClickWithTool,
-  onDeleteSelected,
-  onDropNewDevice,
+  selectedCableType,
+  onConnectNodes,
+  onSelectCable,
+  selectedCableId,
+  onDeleteCable,
+  onDeleteNode,
+  onProbeOpm,
+  onTriggerPing,
+  zoomLevel,
+  onSetZoomLevel,
+  isRunning,
+  connectingSourceNodeId,
+  setConnectingSourceNodeId,
+  pingSourceNodeId,
+  setPingSourceNodeId,
+  issues = [],
 }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Zoom & Pan state
-  const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+
+  // Fit the whole topology into view — recenters & rescales so nothing is
+  // left off-screen, especially important on narrow mobile viewports where
+  // a topology laid out for desktop would otherwise only show one corner.
+  const fitView = useCallback(() => {
+    if (nodes.length === 0) {
+      onSetZoomLevel(1);
+      setPan({ x: 0, y: 0 });
+      return;
+    }
+    const xs = nodes.map((n) => n.x);
+    const ys = nodes.map((n) => n.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
+    const padding = 120;
+    const contentWidth = maxX - minX + padding * 2;
+    const contentHeight = maxY - minY + padding * 2;
+
+    const containerWidth = containerRef.current?.clientWidth || 1000;
+    const containerHeight = containerRef.current?.clientHeight || 700;
+
+    const newZoom = Math.min(
+      Math.min(containerWidth / contentWidth, containerHeight / contentHeight),
+      1.4,
+    );
+    const clampedZoom = Math.min(2.0, Math.max(0.5, Number(newZoom.toFixed(2))));
+    onSetZoomLevel(clampedZoom);
+    setPan({
+      x: (containerWidth - contentWidth * clampedZoom) / 2 - minX * clampedZoom + padding * clampedZoom,
+      y: (containerHeight - contentHeight * clampedZoom) / 2 - minY * clampedZoom + padding * clampedZoom,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes]);
+
+  useImperativeHandle(ref, () => ({ fitView }), [fitView]);
+
+  // Auto-fit once on first mount, and again on resize/orientation change
+  // (e.g. rotating a phone) so the topology stays visible.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => fitView());
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout>;
+    const onResize = () => {
+      clearTimeout(t);
+      t = setTimeout(() => fitView(), 200);
+    };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, [fitView]);
   const [isPanning, setIsPanning] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [startPan, setStartPan] = useState({ x: 0, y: 0 });
 
-  // Node Dragging state
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
-  const [nodeOffset, setNodeOffset] = useState({ x: 0, y: 0 });
-  const [nodeDragOrigin, setNodeDragOrigin] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const hasMovedRef = useRef<boolean>(false);
+  const startPointerPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Two-finger pinch-to-zoom gesture state. Stored in a ref (not React state)
-  // because it's read/written on every touchmove frame and doesn't need to
-  // trigger re-renders itself — only zoom/pan do.
-  const pinchStateRef = useRef<{
-    distance: number;
-    zoom: number;
-    pan: { x: number; y: number };
-    mid: { x: number; y: number };
-  } | null>(null);
+  // Canvas background style: 'clean' (no dots) or 'subtle_lines'
+  const [gridStyle, setGridStyle] = useState<'clean' | 'subtle_lines'>('clean');
 
-  // Congestion metrics
-  const linkCongestions = calculateLinkCongestion(devices, links, activeStreams);
-  const congestionMap = new Map<string, LinkCongestionMetrics>(
-    linkCongestions.map((m) => [m.linkId, m]),
-  );
+  // 2-Finger Pinch to Zoom state
+  const touchDistRef = useRef<number | null>(null);
+  const isPinchingRef = useRef<boolean>(false);
 
-  // Handle canvas mouse down for panning
-  const handleCanvasMouseDown = (e: React.MouseEvent) => {
-    if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg') {
-      onSelectDevice(null);
-      onSelectLink(null);
+  // Animated packets simulation state
+  const [simPackets, setSimPackets] = useState<SimulationPacket[]>([]);
 
-      if (e.button === 0 || e.button === 1) {
-        setIsPanning(true);
-        setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+  // Keyboard shortcut listener (Delete / Backspace to delete selected cable or node)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedCableId) {
+          e.preventDefault();
+          onDeleteCable(selectedCableId);
+        } else if (selectedNodeId) {
+          e.preventDefault();
+          onDeleteNode(selectedNodeId);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedCableId, selectedNodeId, onDeleteCable, onDeleteNode]);
+
+  // Simulation loop for packets when running
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const interval = setInterval(() => {
+      if (cables.length > 0 && Math.random() > 0.35) {
+        const randomCable = cables[Math.floor(Math.random() * cables.length)];
+        if (randomCable.status !== 'broken') {
+          const fromNode = nodes.find((n) => n.id === randomCable.fromNodeId);
+          const toNode = nodes.find((n) => n.id === randomCable.toNodeId);
+
+          if (fromNode && toNode) {
+            const fromNet = checkInternetAccess(fromNode, nodes, cables);
+            const toNet = checkInternetAccess(toNode, nodes, cables);
+
+            const hasCriticalIssue =
+              !fromNode.poweredOn ||
+              !toNode.poweredOn ||
+              issues.some(
+                (iss) =>
+                  iss.severity === 'critical' &&
+                  (iss.targetNodeId === fromNode.id || iss.targetNodeId === toNode.id)
+              );
+
+            const isClientCable = ['lan', 'wireless'].includes(randomCable.type);
+            const isClientWithoutInternet = isClientCable && (!fromNet.hasInternet || !toNet.hasInternet);
+
+            // If link has critical issue or client has no internet routing, normal data doesn't flow
+            const isOptical = ['feeder', 'distribusi', 'drop_core'].includes(randomCable.type);
+            
+            // Only generate red dropped packets occasionally on broken/blocked links
+            const shouldSendPacket = !isClientWithoutInternet && !hasCriticalIssue ? true : Math.random() < 0.25;
+
+            if (shouldSendPacket) {
+              const newPacket: SimulationPacket = {
+                id: `pkt-${Date.now()}-${Math.random()}`,
+                fromNodeId: randomCable.fromNodeId,
+                toNodeId: randomCable.toNodeId,
+                cableId: randomCable.id,
+                progress: 0,
+                type: isOptical ? 'optical' : 'data',
+                color: (hasCriticalIssue || isClientWithoutInternet) ? '#ef4444' : isOptical ? '#10b981' : '#38bdf8',
+              };
+              setSimPackets((prev) => [...prev.slice(-20), newPacket]);
+            }
+          }
+        }
+      }
+
+      setSimPackets((prev) =>
+        prev
+          .map((p) => ({ ...p, progress: p.progress + 0.07 }))
+          .filter((p) => p.progress < 1.0)
+      );
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isRunning, cables, nodes, issues]);
+
+  // Native wheel handler: Scroll pans the canvas; ONLY Ctrl+Scroll or Trackpad Pinch zooms!
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+
+      if (e.ctrlKey || e.metaKey) {
+        // Trackpad Pinch / Ctrl + MouseWheel -> Controlled gentle zoom
+        const factor = e.deltaY < 0 ? 1.05 : 0.95;
+        const newZoom = Math.min(2.5, Math.max(0.4, Number((zoomLevel * factor).toFixed(2))));
+        onSetZoomLevel(newZoom);
+      } else {
+        // Standard Mouse Wheel / 2-finger swipe -> PAN canvas smoothly (NEVER ZOOM!)
+        setPan((prev) => ({
+          x: prev.x - e.deltaX,
+          y: prev.y - e.deltaY,
+        }));
+      }
+    };
+
+    container.addEventListener('wheel', handleNativeWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', handleNativeWheel);
+    };
+  }, [zoomLevel, onSetZoomLevel]);
+
+  // Handle canvas mouse down (panning)
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+
+    // If clicking background or in pan mode
+    if (
+      activeTool === 'pan' ||
+      e.target === containerRef.current ||
+      (e.target as HTMLElement).tagName === 'svg'
+    ) {
+      setIsPanning(true);
+      setStartPan({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      startPointerPos.current = { x: e.clientX, y: e.clientY };
+      hasMovedRef.current = false;
+
+      if (activeTool !== 'move') {
+        onSelectNode(null);
+        onSelectCable('');
       }
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isPanning) {
-      setPan({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y,
-      });
-      return;
+    const dist = Math.hypot(e.clientX - startPointerPos.current.x, e.clientY - startPointerPos.current.y);
+    if (dist > 4) {
+      hasMovedRef.current = true;
     }
 
-    if (draggingNodeId) {
-      const containerRect = containerRef.current?.getBoundingClientRect();
-      if (!containerRect) return;
+    if (isPanning) {
+      setPan({
+        x: e.clientX - startPan.x,
+        y: e.clientY - startPan.y,
+      });
+    } else if (draggingNodeId) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
 
-      const rawX = (e.clientX - containerRect.left - pan.x) / zoom;
-      const rawY = (e.clientY - containerRect.top - pan.y) / zoom;
-
-      // Snap to 10px grid
-      const snappedX = Math.round((rawX - nodeOffset.x) / 10) * 10;
-      const snappedY = Math.round((rawY - nodeOffset.y) / 10) * 10;
-
-      onDeviceMove(draggingNodeId, Math.max(30, snappedX), Math.max(30, snappedY));
+      const newX = (e.clientX - rect.left - pan.x) / zoomLevel - dragOffset.x;
+      const newY = (e.clientY - rect.top - pan.y) / zoomLevel - dragOffset.y;
+      onUpdateNodePosition(
+        draggingNodeId,
+        Math.max(20, Math.round(newX)),
+        Math.max(20, Math.round(newY))
+      );
     }
   };
 
   const handleMouseUp = () => {
     setIsPanning(false);
-    if (draggingNodeId && nodeDragOrigin && onDeviceMoveEnd) {
-      const currentDev = devices.find((d) => d.id === draggingNodeId);
-      if (currentDev && (currentDev.x !== nodeDragOrigin.x || currentDev.y !== nodeDragOrigin.y)) {
-        onDeviceMoveEnd(draggingNodeId, currentDev.x, currentDev.y, nodeDragOrigin.x, nodeDragOrigin.y);
-      }
-    }
     setDraggingNodeId(null);
-    setNodeDragOrigin(null);
   };
 
-  // Touch event handlers for Mobile friendly support
-  const getTouchDistance = (touches: React.TouchList) => {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
-
-  const getTouchMidpoint = (touches: React.TouchList, containerRect: DOMRect) => ({
-    x: (touches[0].clientX + touches[1].clientX) / 2 - containerRect.left,
-    y: (touches[0].clientY + touches[1].clientY) / 2 - containerRect.top,
-  });
-
+  // TOUCH HANDLERS (Mobile Friendly, with Stable Pinch-To-Zoom & Pan)
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
-      // Two fingers down: start a pinch-to-zoom gesture. Cancel any single-
-      // finger pan/drag that may have been in progress.
-      setIsPanning(false);
-      setDraggingNodeId(null);
-      const containerRect = containerRef.current?.getBoundingClientRect();
-      if (!containerRect) return;
-      pinchStateRef.current = {
-        distance: getTouchDistance(e.touches),
-        zoom,
-        pan,
-        mid: getTouchMidpoint(e.touches, containerRect),
-      };
-      return;
-    }
+      // 2 FINGERS: STABLE PINCH-TO-ZOOM
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
 
-    if (e.touches.length === 1 && (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'svg')) {
+      // Only initiate if fingers are separated by at least 25px
+      if (dist > 25) {
+        isPinchingRef.current = true;
+        touchDistRef.current = dist;
+        setIsPanning(false);
+        setDraggingNodeId(null);
+      }
+    } else if (e.touches.length === 1 && !isPinchingRef.current) {
+      // 1 FINGER: PAN CANVAS
       const touch = e.touches[0];
-      setIsPanning(true);
-      setDragStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+      startPointerPos.current = { x: touch.clientX, y: touch.clientY };
+      hasMovedRef.current = false;
+
+      if (
+        activeTool === 'pan' ||
+        e.target === containerRef.current ||
+        (e.target as HTMLElement).tagName === 'svg'
+      ) {
+        setIsPanning(true);
+        setStartPan({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+      }
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2 && pinchStateRef.current) {
-      // Pinch-to-zoom: scale relative to the gesture's starting distance,
-      // keeping the midpoint between the two fingers anchored on-screen
-      // (same math as the mouse-wheel zoom, just driven by touch distance).
-      const containerRect = containerRef.current?.getBoundingClientRect();
-      if (!containerRect) return;
+    if (e.touches.length === 2 && isPinchingRef.current && touchDistRef.current !== null) {
+      // 2 FINGERS PINCH TO ZOOM: Smooth incremental delta (NEVER JUMPS!)
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const currentDist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+      const delta = currentDist - touchDistRef.current;
 
-      const { distance: startDistance, zoom: startZoom, pan: startPan, mid } = pinchStateRef.current;
-      if (startDistance < 1) return;
-
-      const newDistance = getTouchDistance(e.touches);
-      const scaleFactor = newDistance / startDistance;
-      const newZoom = Math.min(Math.max(0.4, startZoom * scaleFactor), 2.5);
-
-      setZoom(newZoom);
-      setPan({
-        x: mid.x - (mid.x - startPan.x) * (newZoom / startZoom),
-        y: mid.y - (mid.y - startPan.y) * (newZoom / startZoom),
-      });
-      return;
-    }
-
-    if (e.touches.length === 1) {
+      // Minimum movement threshold
+      if (Math.abs(delta) > 3) {
+        const factor = delta > 0 ? 1.025 : 0.975;
+        const newZoom = Math.min(2.5, Math.max(0.4, Number((zoomLevel * factor).toFixed(2))));
+        onSetZoomLevel(newZoom);
+        touchDistRef.current = currentDist;
+      }
+    } else if (e.touches.length === 1 && !isPinchingRef.current) {
       const touch = e.touches[0];
-      if (isPanning) {
+      const moveDist = Math.hypot(touch.clientX - startPointerPos.current.x, touch.clientY - startPointerPos.current.y);
+      if (moveDist > 4) {
+        hasMovedRef.current = true;
+      }
+
+      if (draggingNodeId) {
+        // MOVE NODE
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
+        const newX = (touch.clientX - rect.left - pan.x) / zoomLevel - dragOffset.x;
+        const newY = (touch.clientY - rect.top - pan.y) / zoomLevel - dragOffset.y;
+        onUpdateNodePosition(
+          draggingNodeId,
+          Math.max(20, Math.round(newX)),
+          Math.max(20, Math.round(newY))
+        );
+      } else if (isPanning) {
+        // PAN CANVAS
         setPan({
-          x: touch.clientX - dragStart.x,
-          y: touch.clientY - dragStart.y,
+          x: touch.clientX - startPan.x,
+          y: touch.clientY - startPan.y,
         });
-      } else if (draggingNodeId) {
-        const containerRect = containerRef.current?.getBoundingClientRect();
-        if (!containerRect) return;
-
-        const rawX = (touch.clientX - containerRect.left - pan.x) / zoom;
-        const rawY = (touch.clientY - containerRect.top - pan.y) / zoom;
-
-        const snappedX = Math.round((rawX - nodeOffset.x) / 10) * 10;
-        const snappedY = Math.round((rawY - nodeOffset.y) / 10) * 10;
-
-        onDeviceMove(draggingNodeId, Math.max(30, snappedX), Math.max(30, snappedY));
       }
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    // Once fewer than two fingers remain, the pinch gesture is over.
     if (e.touches.length < 2) {
-      pinchStateRef.current = null;
+      isPinchingRef.current = false;
+      touchDistRef.current = null;
     }
-    setIsPanning(false);
-    if (draggingNodeId && nodeDragOrigin && onDeviceMoveEnd) {
-      const currentDev = devices.find((d) => d.id === draggingNodeId);
-      if (currentDev && (currentDev.x !== nodeDragOrigin.x || currentDev.y !== nodeDragOrigin.y)) {
-        onDeviceMoveEnd(draggingNodeId, currentDev.x, currentDev.y, nodeDragOrigin.x, nodeDragOrigin.y);
-      }
+    if (e.touches.length === 0) {
+      setIsPanning(false);
+      setDraggingNodeId(null);
     }
-    setDraggingNodeId(null);
-    setNodeDragOrigin(null);
   };
 
-  // Zoom on wheel
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-    const newZoom = Math.min(Math.max(0.4, zoom * zoomFactor), 2.5);
+  // Node Click / Select Dispatcher
+  const handleNodeClick = (node: NetworkNode, e: React.MouseEvent) => {
+    e.stopPropagation();
 
-    const containerRect = containerRef.current?.getBoundingClientRect();
-    if (!containerRect) return;
-
-    const mouseX = e.clientX - containerRect.left;
-    const mouseY = e.clientY - containerRect.top;
-
-    const newPanX = mouseX - (mouseX - pan.x) * (newZoom / zoom);
-    const newPanY = mouseY - (mouseY - pan.y) * (newZoom / zoom);
-
-    setZoom(newZoom);
-    setPan({ x: newPanX, y: newPanY });
-  };
-
-  // Drag and drop from device catalog sidebar
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const deviceType = e.dataTransfer.getData('text/plain');
-    if (!deviceType) return;
-
-    const containerRect = containerRef.current?.getBoundingClientRect();
-    if (!containerRect) return;
-
-    const dropX = (e.clientX - containerRect.left - pan.x) / zoom;
-    const dropY = (e.clientY - containerRect.top - pan.y) / zoom;
-
-    onDropNewDevice(deviceType, Math.round(dropX / 10) * 10, Math.round(dropY / 10) * 10);
-  };
-
-  const handleFitView = useCallback(() => {
-    if (devices.length === 0) {
-      setZoom(1);
-      setPan({ x: 0, y: 0 });
+    // If user dragged more than 5px, don't open inspector on drag release
+    if (hasMovedRef.current && activeTool === 'move') {
       return;
     }
 
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
+    if (activeTool === 'select' || activeTool === 'move') {
+      onSelectNode(node.id);
+    } else if (activeTool === 'opm') {
+      onProbeOpm(node.id);
+    } else if (activeTool === 'cable') {
+      if (!connectingSourceNodeId) {
+        setConnectingSourceNodeId(node.id);
+      } else {
+        if (connectingSourceNodeId !== node.id) {
+          onConnectNodes(connectingSourceNodeId, node.id, selectedCableType);
+        }
+        setConnectingSourceNodeId(null);
+      }
+    } else if (activeTool === 'ping') {
+      if (!pingSourceNodeId) {
+        setPingSourceNodeId(node.id);
+      } else {
+        if (pingSourceNodeId !== node.id) {
+          onTriggerPing(pingSourceNodeId, node.id);
+        }
+        setPingSourceNodeId(null);
+      }
+    }
+  };
 
-    devices.forEach((d) => {
-      minX = Math.min(minX, d.x);
-      minY = Math.min(minY, d.y);
-      maxX = Math.max(maxX, d.x);
-      maxY = Math.max(maxY, d.y);
+  // Node Drag Start (Mouse)
+  const handleNodeDragStart = (node: NetworkNode, e: React.MouseEvent) => {
+    // Only drag node if tool is 'move'
+    if (activeTool !== 'move') return;
+    e.stopPropagation();
+
+    startPointerPos.current = { x: e.clientX, y: e.clientY };
+    hasMovedRef.current = false;
+    setDraggingNodeId(node.id);
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const mouseX = (e.clientX - rect.left - pan.x) / zoomLevel;
+    const mouseY = (e.clientY - rect.top - pan.y) / zoomLevel;
+    setDragOffset({
+      x: mouseX - node.x,
+      y: mouseY - node.y,
     });
+  };
 
-    const padding = 120;
-    const width = maxX - minX + padding * 2;
-    const height = maxY - minY + padding * 2;
+  // Node Drag Start (Touch)
+  const handleNodeTouchStart = (node: NetworkNode, e: React.TouchEvent) => {
+    if (activeTool !== 'move') return;
+    if (e.touches.length !== 1) return;
+    e.stopPropagation();
 
-    const containerWidth = containerRef.current?.clientWidth || 1000;
-    const containerHeight = containerRef.current?.clientHeight || 700;
+    const touch = e.touches[0];
+    startPointerPos.current = { x: touch.clientX, y: touch.clientY };
+    hasMovedRef.current = false;
+    setDraggingNodeId(node.id);
 
-    const newZoom = Math.min(Math.min(containerWidth / width, containerHeight / height), 1.4);
-    setZoom(newZoom);
-    setPan({
-      x: (containerWidth - width * newZoom) / 2 - minX * newZoom + padding * newZoom,
-      y: (containerHeight - height * newZoom) / 2 - minY * newZoom + padding * newZoom,
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const touchX = (touch.clientX - rect.left - pan.x) / zoomLevel;
+    const touchY = (touch.clientY - rect.top - pan.y) / zoomLevel;
+    setDragOffset({
+      x: touchX - node.x,
+      y: touchY - node.y,
     });
-  }, [devices]);
+  };
 
-  // Expose fitView so the parent (App) can re-center the topology after
-  // loading a preset scenario, importing a file, or on initial page load.
-  useImperativeHandle(ref, () => ({
-    fitView: handleFitView,
-  }), [handleFitView]);
-
-  // Auto-fit the topology into view on first mount (fixes topology being
-  // invisible off-screen on small/mobile viewports where the canvas is
-  // narrower than the desktop layout the devices were originally placed for).
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => handleFitView());
-    return () => cancelAnimationFrame(raf);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Re-fit when the viewport is resized or the device orientation changes
-  // (e.g. rotating a phone/tablet), so the topology stays centered and
-  // visible instead of drifting off-screen.
-  useEffect(() => {
-    let resizeTimer: ReturnType<typeof setTimeout>;
-    const handleResize = () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => handleFitView(), 200);
-    };
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
-    return () => {
-      clearTimeout(resizeTimer);
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
-    };
-  }, [handleFitView]);
+  const getNodeIcon = (type: string) => {
+    switch (type) {
+      case 'internet': return <Globe className="h-5 w-5 text-sky-600" />;
+      case 'metro': return <Radio className="h-5 w-5 text-indigo-600" />;
+      case 'olt': return <Server className="h-5 w-5 text-emerald-600" />;
+      case 'odc': return <Box className="h-5 w-5 text-amber-600" />;
+      case 'odp': return <Box className="h-5 w-5 text-teal-600" />;
+      case 'splitter': return <Share2 className="h-5 w-5 text-rose-600" />;
+      case 'htb': return <Cpu className="h-5 w-5 text-purple-600" />;
+      case 'ont': return <Radio className="h-5 w-5 text-sky-600" />;
+      case 'mikrotik': return <Cpu className="h-5 w-5 text-orange-600" />;
+      case 'switch': return <Layers className="h-5 w-5 text-blue-600" />;
+      case 'router': return <Radio className="h-5 w-5 text-cyan-600" />;
+      case 'mesh': return <Radio className="h-5 w-5 text-emerald-600" />;
+      case 'pc': return <Monitor className="h-5 w-5 text-slate-700" />;
+      case 'cctv': return <Camera className="h-5 w-5 text-purple-600" />;
+      case 'smartphone': return <Smartphone className="h-5 w-5 text-cyan-600" />;
+      case 'iot': return <Zap className="h-5 w-5 text-teal-600" />;
+      case 'server': return <Server className="h-5 w-5 text-slate-800" />;
+      default: return <Box className="h-5 w-5" />;
+    }
+  };
 
   return (
     <div
+      id="network-canvas-container"
       ref={containerRef}
-      onMouseDown={handleCanvasMouseDown}
+      onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
-      onWheel={handleWheel}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-      className="relative flex-1 h-full w-full bg-[var(--app-bg)] overflow-hidden select-none cursor-crosshair touch-none"
+      onTouchCancel={handleTouchEnd}
+      className={`relative flex-1 h-full w-full overflow-hidden select-none transition-colors duration-150 touch-none ${
+        gridStyle === 'clean' ? 'bg-[#f8fafc]' : 'bg-[#f1f5f9]'
+      } ${
+        activeTool === 'move'
+          ? 'cursor-move'
+          : activeTool === 'pan'
+          ? 'cursor-grab active:cursor-grabbing'
+          : activeTool === 'cable'
+          ? 'cursor-crosshair'
+          : 'cursor-default'
+      }`}
+      style={{
+        backgroundImage:
+          gridStyle === 'subtle_lines'
+            ? `linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px)`
+            : 'none',
+        backgroundSize: `${36 * zoomLevel}px ${36 * zoomLevel}px`,
+        backgroundPosition: `${pan.x}px ${pan.y}px`,
+        touchAction: 'none', // Prevents browser from hijacking touch gestures
+      }}
     >
-      {/* Background Grid */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: `
-            radial-gradient(circle, var(--canvas-dot) 1.5px, transparent 1.5px)
-          `,
-          backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
-          backgroundPosition: `${pan.x}px ${pan.y}px`,
-        }}
-      />
+      {/* Mode Indicator Banner */}
+      {activeTool === 'move' && (
+        <div className="export-exclude absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full bg-indigo-600 text-white px-4 py-1.5 text-xs font-semibold shadow-md backdrop-blur-xs animate-in fade-in">
+          <Move className="h-3.5 w-3.5" />
+          <span>Mode Geser Node: Sentuh / seret perangkat untuk memindahkan</span>
+        </div>
+      )}
 
-      {/* Main Pan-Zoom Transform Plane */}
-      <div
-        style={{
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-          transformOrigin: '0 0',
-          width: '100%',
-          height: '100%',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-        }}
+      {/* Grid Style Toggle Button */}
+      <div className="export-exclude absolute bottom-3 right-3 z-30 flex items-center gap-1 bg-white/90 px-2 py-1 rounded-lg border border-slate-200 shadow-2xs text-[10px] text-slate-600 backdrop-blur-xs">
+        <Grid className="h-3 w-3 text-slate-400" />
+        <button
+          onClick={() => setGridStyle(gridStyle === 'clean' ? 'subtle_lines' : 'clean')}
+          className="font-medium hover:text-slate-900 transition-colors"
+          title="Ubah tampilan grid kanvas (Bersih Polos vs Garis Halus)"
+        >
+          Grid: {gridStyle === 'clean' ? 'Bersih Polos' : 'Garis Halus'}
+        </button>
+      </div>
+
+      {/* SVG Canvas for Cables and Signal Pulses */}
+      <svg
+        className="absolute inset-0 w-full h-full pointer-events-none z-10"
+        style={{ overflow: 'visible' }}
       >
-        {/* SVG Plane for Cables, Links & Packet Animations */}
-        <svg className="absolute top-0 left-0 w-[5000px] h-[5000px] pointer-events-none z-10 overflow-visible">
-          <defs>
-            <filter id="packet-glow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
-            </filter>
-            <filter id="congestion-glow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="4" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
-            </filter>
-          </defs>
+        <defs>
+          <filter id="cableShadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#0f172a" floodOpacity="0.2" />
+          </filter>
+          <filter id="packetGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
 
-          {/* Render Cable Links */}
-          {links.map((link) => {
-            const devA = devices.find((d) => d.id === link.fromDeviceId);
-            const devB = devices.find((d) => d.id === link.toDeviceId);
-            if (!devA || !devB) return null;
+        {/* Transformed Group synchronized with Pan & Zoom */}
+        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoomLevel})`}>
+          {/* Render Cable Lines */}
+          {cables.map((cable) => {
+            const fromNode = nodes.find((n) => n.id === cable.fromNodeId);
+            const toNode = nodes.find((n) => n.id === cable.toNodeId);
+            if (!fromNode || !toNode) return null;
 
-            const isSelected = selectedLinkId === link.id;
-            const isDown = link.status === 'down';
-            const spec = CABLE_CATALOG[link.cableType] || CABLE_CATALOG['ethernet_straight'];
+            const meta = CABLE_METADATA[cable.type];
+            const isSelected = selectedCableId === cable.id;
 
-            // Congestion evaluation
-            const metric = congestionMap.get(link.id);
-            const isCongested = metric && (metric.status === 'congested' || metric.status === 'critical');
-            const isCritical = metric && metric.status === 'critical';
+            // Center coordinates of nodes (Node width is 132px, height is ~85px)
+            const x1 = Number(fromNode.x) + 66;
+            const y1 = Number(fromNode.y) + 42;
+            const x2 = Number(toNode.x) + 66;
+            const y2 = Number(toNode.y) + 42;
 
-            let lineColor = spec.color;
-            if (isDown) lineColor = '#ef4444';
-            else if (isSelected) lineColor = '#3b82f6';
-            else if (isCritical) lineColor = '#f43f5e';
-            else if (isCongested) lineColor = '#f59e0b';
+            // Smooth Bezier Curve calculation
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const cx1 = x1 + dx * 0.45;
+            const cy1 = y1;
+            const cx2 = x2 - dx * 0.45;
+            const cy2 = y2;
+            const pathD = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
 
-            const posA = { x: devA.x + 38, y: devA.y + 38 };
-            const posB = { x: devB.x + 38, y: devB.y + 38 };
-
-            const midX = (posA.x + posB.x) / 2;
-            const midY = (posA.y + posB.y) / 2;
-            const dx = posB.x - posA.x;
-            const dy = posB.y - posA.y;
-            const normalX = -dy * 0.08;
-            const normalY = dx * 0.08;
-            const ctrlX = midX + normalX;
-            const ctrlY = midY + normalY;
-
-            const pathD = `M ${posA.x} ${posA.y} Q ${ctrlX} ${ctrlY} ${posB.x} ${posB.y}`;
-
-            const portA = devA.ports.find((p) => p.id === link.fromPortId);
-            const portB = devB.ports.find((p) => p.id === link.toPortId);
+            const isBroken = cable.status === 'broken';
+            const cableColor = isBroken ? '#ef4444' : (meta?.colorHex || '#0284c7');
 
             return (
               <g
-                key={link.id}
+                key={cable.id}
+                className="pointer-events-auto cursor-pointer group"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSelectLink(link.id);
+                  onSelectCable(cable.id);
                 }}
-                className="cursor-pointer group pointer-events-auto"
               >
-                {/* Invisible hover hitbox */}
-                <path d={pathD} fill="none" stroke="transparent" strokeWidth="18" />
-
-                {/* Cable Wire */}
+                {/* 1. Wide invisible hover stroke */}
                 <path
                   d={pathD}
                   fill="none"
-                  stroke={lineColor}
-                  strokeWidth={isCritical ? 4.5 : isSelected ? 4 : spec.category === 'optical' ? 3 : 2.5}
-                  strokeDasharray={isDown ? '4 4' : spec.strokeDashArray}
-                  strokeLinecap="round"
-                  filter={isCritical ? 'url(#congestion-glow)' : undefined}
-                  className={`transition-all ${isCritical ? 'animate-pulse' : ''}`}
+                  stroke="transparent"
+                  strokeWidth="24"
+                  className="hover:stroke-sky-400/20 transition-all"
                 />
 
-                {/* End Point Markers (Status LEDs) */}
-                <circle cx={posA.x} cy={posA.y} r="4" fill={portA?.isUp ? '#10b981' : '#ef4444'} stroke="#0f172a" strokeWidth="1.5" />
-                <circle cx={posB.x} cy={posB.y} r="4" fill={portB?.isUp ? '#10b981' : '#ef4444'} stroke="#0f172a" strokeWidth="1.5" />
+                {/* 2. White Halo Contrast Backing */}
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={isSelected ? '#38bdf8' : '#ffffff'}
+                  strokeWidth={isSelected ? 9 : 6.5}
+                  strokeOpacity={isSelected ? 0.8 : 0.95}
+                  strokeLinecap="round"
+                />
 
-                {/* Congestion load badge & info on link */}
-                <g className="transition-opacity duration-200">
-                  {metric && metric.currentLoadMbps > 0 ? (
-                    <>
-                      <rect
-                        x={midX - 45}
-                        y={midY - 26}
-                        width="90"
-                        height="20"
-                        rx="5"
-                        fill={isCritical ? '#991b1b' : isCongested ? '#78350f' : '#020617'}
-                        stroke={isCritical ? '#f43f5e' : isCongested ? '#f59e0b' : '#334155'}
-                        strokeWidth="1"
-                        opacity="0.95"
-                      />
-                      <text
-                        x={midX}
-                        y={midY - 12}
-                        textAnchor="middle"
-                        fill={isCritical ? '#fecdd3' : isCongested ? '#fef08a' : '#38bdf8'}
-                        fontSize="9.5"
-                        fontWeight="bold"
-                        fontFamily="monospace"
-                      >
-                        {metric.currentLoadMbps}M ({metric.loadPercent}%)
-                      </text>
-                    </>
-                  ) : (
-                    <>
-                      {/* Standard Cable type & length badge */}
-                      <rect
-                        x={midX - 35}
-                        y={midY - 24}
-                        width="70"
-                        height="16"
-                        rx="4"
-                        fill="#020617"
-                        stroke="#334155"
-                        strokeWidth="0.8"
-                        opacity="0.95"
-                      />
-                      <text x={midX} y={midY - 12} textAnchor="middle" fill="#cbd5e1" fontSize="9" fontWeight="500">
-                        {link.lengthMeters}m {spec.category === 'optical' ? '• FO' : ''}
-                      </text>
-                    </>
-                  )}
+                {/* 3. Main Colored Cable Wire */}
+                <path
+                  d={pathD}
+                  fill="none"
+                  stroke={cableColor}
+                  strokeWidth={isSelected ? 4.5 : 3.5}
+                  strokeLinecap="round"
+                  strokeDasharray={
+                    isBroken
+                      ? '5,5'
+                      : cable.type === 'drop_core' || cable.type === 'distribusi'
+                      ? '8,4'
+                      : cable.type === 'wireless'
+                      ? '4,5'
+                      : 'none'
+                  }
+                  filter="url(#cableShadow)"
+                  className="transition-colors"
+                />
+
+                {/* 4. Port Terminal Connectors at both ends */}
+                <circle
+                  cx={x1}
+                  cy={y1}
+                  r="5.5"
+                  fill={cableColor}
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                  filter="url(#cableShadow)"
+                />
+                <circle
+                  cx={x2}
+                  cy={y2}
+                  r="5.5"
+                  fill={cableColor}
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                  filter="url(#cableShadow)"
+                />
+
+                {/* 5. Cable Midpoint Badge */}
+                <g transform={`translate(${(x1 + x2) / 2}, ${(y1 + y2) / 2})`}>
+                  <rect
+                    x="-38"
+                    y="-13"
+                    width="76"
+                    height="26"
+                    rx="13"
+                    fill="#ffffff"
+                    stroke={isSelected ? '#0284c7' : isBroken ? '#ef4444' : cableColor}
+                    strokeWidth={isSelected ? 2.5 : 1.5}
+                    filter="url(#cableShadow)"
+                    className="group-hover:scale-110 transition-transform"
+                  />
+                  <text
+                    x="0"
+                    y="4.5"
+                    textAnchor="middle"
+                    fontSize="10"
+                    fontWeight="700"
+                    fill="#0f172a"
+                    className="font-mono select-none"
+                  >
+                    {isBroken ? 'PUTUS' : cable.type === 'lan' ? `${(cable.lengthKm * 1000).toFixed(0)}m` : `${cable.lengthKm.toFixed(1)}km`}
+                  </text>
                 </g>
               </g>
             );
           })}
 
-          {/* Render Animated Packets */}
-          {packetAnimations.map((pkt) => (
-            <g key={pkt.id} filter="url(#packet-glow)">
-              <circle
-                cx={pkt.fromX + (pkt.toX - pkt.fromX) * pkt.progress}
-                cy={pkt.fromY + (pkt.toY - pkt.fromY) * pkt.progress}
-                r="6"
-                fill={pkt.color}
-              />
-              <circle
-                cx={pkt.fromX + (pkt.toX - pkt.fromX) * pkt.progress}
-                cy={pkt.fromY + (pkt.toY - pkt.fromY) * pkt.progress}
-                r="12"
-                fill={pkt.color}
-                opacity="0.3"
-              />
-            </g>
-          ))}
-        </svg>
+          {/* Animated Packets Moving Across Cables during RUN */}
+          {isRunning &&
+            simPackets.map((pkt) => {
+              const fromNode = nodes.find((n) => n.id === pkt.fromNodeId);
+              const toNode = nodes.find((n) => n.id === pkt.toNodeId);
+              if (!fromNode || !toNode) return null;
 
-        {/* Render Device Nodes */}
-        {devices.map((device) => {
-          const tmpl = DEVICE_TEMPLATES[device.type] || DEVICE_TEMPLATES['pc'];
-          const Icon = ICON_MAP[tmpl.iconName] || Monitor;
-          const isSelected = selectedDeviceId === device.id;
-          const isConnectingSource = connectingSourceId === device.id;
+              const x1 = Number(fromNode.x) + 66;
+              const y1 = Number(fromNode.y) + 42;
+              const x2 = Number(toNode.x) + 66;
+              const y2 = Number(toNode.y) + 42;
 
-          const primaryPort = device.ports.find((p) => p.isUp && p.ipAddress);
-          const ipDisplay = primaryPort?.ipAddress || null;
+              // Cubic bezier interpolation
+              const dx = x2 - x1;
+              const cx1 = x1 + dx * 0.45;
+              const cy1 = y1;
+              const cx2 = x2 - dx * 0.45;
+              const cy2 = y2;
 
-          // Optical power computation for FTTH nodes
-          const isOptical = ['ont', 'odp', 'odc', 'olt', 'splitter', 'splitter_1_8', 'splitter_1_4', 'splitter_1_2'].includes(device.type);
-          const opticalInfo = isOptical ? calculateDeviceOpticalPower(device.id, devices, links) : null;
+              const t = pkt.progress;
+              const u = 1 - t;
+              const currX =
+                u * u * u * x1 +
+                3 * u * u * t * cx1 +
+                3 * u * t * t * cx2 +
+                t * t * t * x2;
+              const currY =
+                u * u * u * y1 +
+                3 * u * u * t * cy1 +
+                3 * u * t * t * cy2 +
+                t * t * t * y2;
+
+              return (
+                <g key={pkt.id}>
+                  <circle
+                    cx={currX}
+                    cy={currY}
+                    r="5.5"
+                    fill={pkt.color}
+                    filter="url(#packetGlow)"
+                  />
+                  <circle cx={currX} cy={currY} r="2.5" fill="#ffffff" />
+                </g>
+              );
+            })}
+        </g>
+      </svg>
+
+      {/* Nodes HTML Layer */}
+      <div
+        className="absolute inset-0 pointer-events-none z-20"
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})`,
+          transformOrigin: '0 0',
+        }}
+      >
+        {nodes.map((node) => {
+          const isSelected = selectedNodeId === node.id;
+          const isSourceConnect = connectingSourceNodeId === node.id;
+          const isPingSource = pingSourceNodeId === node.id;
+          const optResult = opticalResults.get(node.id);
+          const nodeIssues = (issues || []).filter((iss) => iss.targetNodeId === node.id);
+          const criticalIssue = nodeIssues.find((iss) => iss.severity === 'critical');
+          const warningIssue = nodeIssues.find((iss) => iss.severity === 'warning');
+          const isOpticalLos = optResult?.status === 'critical_los';
+          const isPowerOff = !node.poweredOn;
+
+          const netAccess = checkInternetAccess(node, nodes, cables);
+          const isClientDevice = ['pc', 'cctv', 'smartphone', 'iot', 'server'].includes(node.type);
+          const hasInternetIssue = isClientDevice && !netAccess.hasInternet && node.poweredOn;
+          const isOntBridge = node.type === 'ont' && node.ontConfig?.wanMode === 'bridge';
+
+          const hasCritical = Boolean(criticalIssue) || isOpticalLos || hasInternetIssue;
+          const hasWarning = Boolean(warningIssue) || optResult?.status === 'acceptable' || isOntBridge;
 
           return (
             <div
-              key={device.id}
+              key={node.id}
+              onClick={(e) => handleNodeClick(node, e)}
+              onMouseDown={(e) => handleNodeDragStart(node, e)}
+              onTouchStart={(e) => handleNodeTouchStart(node, e)}
               style={{
-                left: `${device.x}px`,
-                top: `${device.y}px`,
-                width: '76px',
+                left: `${node.x}px`,
+                top: `${node.y}px`,
               }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-
-                if (isConnecting || activeTool !== 'pointer') {
-                  onDeviceClickWithTool(device);
-                  return;
-                }
-
-                onSelectDevice(device.id);
-
-                const containerRect = containerRef.current?.getBoundingClientRect();
-                if (!containerRect) return;
-
-                const mouseX = (e.clientX - containerRect.left - pan.x) / zoom;
-                const mouseY = (e.clientY - containerRect.top - pan.y) / zoom;
-
-                setDraggingNodeId(device.id);
-                setNodeOffset({ x: mouseX - device.x, y: mouseY - device.y });
-                setNodeDragOrigin({ id: device.id, x: device.x, y: device.y });
-              }}
-              onTouchStart={(e) => {
-                e.stopPropagation();
-                if (isConnecting || activeTool !== 'pointer') {
-                  onDeviceClickWithTool(device);
-                  return;
-                }
-                onSelectDevice(device.id);
-
-                const touch = e.touches[0];
-                const containerRect = containerRef.current?.getBoundingClientRect();
-                if (!containerRect) return;
-
-                const mouseX = (touch.clientX - containerRect.left - pan.x) / zoom;
-                const mouseY = (touch.clientY - containerRect.top - pan.y) / zoom;
-
-                setDraggingNodeId(device.id);
-                setNodeOffset({ x: mouseX - device.x, y: mouseY - device.y });
-                setNodeDragOrigin({ id: device.id, x: device.x, y: device.y });
-              }}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                onDeviceDoubleClick(device);
-              }}
-              className={`absolute flex flex-col items-center pointer-events-auto cursor-grab active:cursor-grabbing group transition-transform ${
-                isSelected ? 'scale-105 z-30' : 'z-20'
+              className={`absolute pointer-events-auto w-[132px] rounded-xl bg-white border p-2.5 transition-shadow select-none shadow-xs ${
+                activeTool === 'move' ? 'cursor-move hover:ring-2 hover:ring-indigo-400' : 'cursor-pointer'
+              } ${
+                isSourceConnect
+                  ? 'border-sky-500 ring-4 ring-sky-300 animate-pulse'
+                  : isPingSource
+                  ? 'border-purple-500 ring-4 ring-purple-300 animate-pulse'
+                  : isSelected
+                  ? 'border-sky-600 ring-2 ring-sky-400 shadow-md'
+                  : hasCritical
+                  ? 'border-rose-400 ring-1 ring-rose-300'
+                  : hasWarning
+                  ? 'border-amber-400 ring-1 ring-amber-200'
+                  : 'border-slate-300 hover:border-slate-400 hover:shadow-sm'
               }`}
             >
-              {/* Device Box Icon */}
-              <div
-                className={`relative w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all shadow-xl ${
-                  isConnectingSource
-                    ? 'ring-4 ring-amber-400 border-amber-300 bg-amber-950/60 scale-110 animate-pulse'
-                    : isSelected
-                    ? 'ring-4 ring-blue-500/50 border-blue-400 bg-[var(--surface-1)] shadow-blue-500/20'
-                    : 'border-[var(--border-1)]/80 bg-[var(--surface-1)]/90 hover:border-[var(--border-1)] hover:bg-[var(--surface-2)]'
-                }`}
-                style={{
-                  boxShadow: isSelected ? `0 0 20px ${tmpl.color}40` : '0 4px 12px rgba(0,0,0,0.5)',
-                }}
-              >
-                <Icon className="w-7 h-7 transition-colors" style={{ color: tmpl.color }} />
+              {/* Drag Handle Indicator if in 'move' mode */}
+              {activeTool === 'move' && (
+                <div className="flex items-center justify-center gap-1 rounded bg-indigo-50 py-0.5 mb-1.5 text-[9px] font-bold text-indigo-700">
+                  <Move className="h-3 w-3" />
+                  <span>TARIK GESER</span>
+                </div>
+              )}
 
-                {/* Status Indicator Dot */}
-                <div
-                  className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-slate-950 ${
-                    device.status === 'online'
-                      ? 'bg-emerald-500'
-                      : device.status === 'warning'
-                      ? 'bg-amber-500 animate-ping'
-                      : 'bg-red-500'
-                  }`}
-                  title={`Status: ${device.status}`}
-                />
+              {/* Header Icon + Power Status */}
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 border border-slate-100">
+                  {getNodeIcon(node.type)}
+                </div>
 
-                {/* Port count badge */}
-                <div className="absolute -bottom-1 -left-1 bg-[var(--surface-2)] border border-[var(--border-1)] text-[var(--text-secondary)] text-[9px] font-mono px-1 rounded">
-                  {device.ports.length}p
+                <div className="flex items-center gap-1">
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      isPowerOff
+                        ? 'bg-slate-300'
+                        : isOpticalLos
+                        ? 'bg-rose-500 animate-ping'
+                        : hasCritical
+                        ? 'bg-rose-500 animate-pulse'
+                        : hasWarning
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500'
+                    }`}
+                    title={
+                      isPowerOff
+                        ? 'Perangkat Mati (Power Off)'
+                        : criticalIssue
+                        ? `Error: ${criticalIssue.title}`
+                        : warningIssue
+                        ? `Peringatan: ${warningIssue.title}`
+                        : 'Perangkat Hidup & Normal'
+                    }
+                  />
+                  <span className="text-[9.5px] text-slate-400 font-mono font-bold">
+                    {node.type.toUpperCase()}
+                  </span>
                 </div>
               </div>
 
-              {/* Hostname & IP / FTTH / IoT Badges */}
-              <div className="mt-1.5 flex flex-col items-center text-center max-w-[120px]">
-                <span className="text-xs font-semibold text-[var(--text-secondary)] truncate leading-tight group-hover:text-blue-400">
-                  {device.name}
-                </span>
+              {/* Title & Brand Tag */}
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between gap-1">
+                  <div className="text-xs font-bold text-slate-800 truncate" title={node.name}>
+                    {node.name.split('(')[0].trim()}
+                  </div>
+                  {/* Brand Tag (ZTE, Huawei, MikroTik, Cisco, dll) */}
+                  {node.brand && (
+                    <span className="text-[8.5px] font-bold px-1 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200 shrink-0">
+                      {node.brand}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[10px] text-slate-500 truncate" title={node.label || node.model}>
+                  {node.model || node.label}
+                </div>
 
-                {/* IP Display */}
-                {ipDisplay && (
-                  <span className="text-[10px] font-mono font-medium text-emerald-400/90 bg-[var(--surface-1)]/90 px-1 rounded border border-[var(--border-2)]/80 mt-0.5 truncate max-w-full">
-                    {ipDisplay}
-                  </span>
+                {/* Real-time Issue Badge Tag on Node Card */}
+                {criticalIssue ? (
+                  <div
+                    className="mt-1 flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[8.5px] font-bold text-rose-700 border border-rose-200 truncate"
+                    title={criticalIssue.title}
+                  >
+                    <AlertCircle className="h-2.5 w-2.5 shrink-0 text-rose-600" />
+                    <span className="truncate">
+                      {criticalIssue.title.includes('Bridge')
+                        ? '⚠️ Mode Bridge (No Internet)'
+                        : criticalIssue.title.includes('Gateway')
+                        ? '⚠️ Gateway Salah'
+                        : criticalIssue.title.includes('Subnet')
+                        ? '⚠️ Subnet Beda'
+                        : criticalIssue.title.includes('Konflik')
+                        ? '⚠️ IP Konflik'
+                        : '⚠️ Error IP/Koneksi'}
+                    </span>
+                  </div>
+                ) : hasInternetIssue ? (
+                  <div
+                    className="mt-1 flex items-center gap-1 rounded bg-rose-50 px-1.5 py-0.5 text-[8.5px] font-bold text-rose-700 border border-rose-200 truncate"
+                    title={netAccess.reason || 'Koneksi internet terputus'}
+                  >
+                    <AlertCircle className="h-2.5 w-2.5 shrink-0 text-rose-600" />
+                    <span className="truncate">
+                      {node.type === 'cctv' ? '⚠️ Stream Offline' : '⚠️ Internet Putus'}
+                    </span>
+                  </div>
+                ) : isOntBridge ? (
+                  <div
+                    className="mt-1 flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-800 border border-amber-300 truncate"
+                    title="ONT dalam Mode Bridge (Layer 2) - Klien butuh router dialer PPPoE"
+                  >
+                    <AlertCircle className="h-2.5 w-2.5 shrink-0 text-amber-600" />
+                    <span className="truncate">⚠️ Bridge (No Route)</span>
+                  </div>
+                ) : warningIssue ? (
+                  <div
+                    className="mt-1 flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-700 border border-amber-200 truncate"
+                    title={warningIssue.title}
+                  >
+                    <AlertCircle className="h-2.5 w-2.5 shrink-0 text-amber-600" />
+                    <span className="truncate">
+                      {warningIssue.title.includes('Gateway Kosong') ? 'Gateway Kosong' : 'Peringatan'}
+                    </span>
+                  </div>
+                ) : null}
+
+                {/* VLAN Tag Badge if enabled */}
+                {node.vlanConfig?.enabled && (
+                  <div
+                    className="mt-1 flex items-center gap-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[8.5px] font-bold text-indigo-700 border border-indigo-200 truncate"
+                    title={`VLAN ID: ${node.vlanConfig.vlanId} (${node.vlanConfig.mode.toUpperCase()}) - ${node.vlanConfig.vlanName || 'Tagged'}`}
+                  >
+                    <Tag className="h-2.5 w-2.5 shrink-0 text-indigo-600" />
+                    <span className="truncate">
+                      VLAN {node.vlanConfig.vlanId} ({node.vlanConfig.mode === 'trunk' ? 'TRUNK' : 'ACC'})
+                    </span>
+                  </div>
                 )}
+              </div>
 
-                {/* Optical Redaman (dBm) Badge */}
-                {opticalInfo && opticalInfo.rxPowerDbm > -90 && (
-                  <span
-                    className={`text-[9px] font-mono font-bold px-1 rounded border mt-0.5 ${
-                      opticalInfo.isWithinMargin
-                        ? 'text-purple-300 bg-purple-950/60 border-purple-800/50'
-                        : 'text-rose-400 bg-rose-950/70 border-rose-800/70 animate-pulse'
+              {/* Technical Indicator / Telemetry summary */}
+              <div className="mt-2 pt-1.5 border-t border-slate-100 space-y-0.5 text-[9.5px]">
+                {/* Optical Rx power if FTTH */}
+                {optResult && optResult.status !== 'disconnected' && node.type !== 'olt' && (
+                  <div
+                    className={`flex items-center justify-between font-mono font-bold ${
+                      optResult.status === 'critical_los'
+                        ? 'text-rose-600'
+                        : optResult.status === 'acceptable'
+                        ? 'text-amber-600'
+                        : 'text-emerald-700'
                     }`}
                   >
-                    Rx: {opticalInfo.rxPowerDbm} dBm
-                  </span>
+                    <span>Rx:</span>
+                    <span>{optResult.rxPowerDbm} dBm</span>
+                  </div>
                 )}
 
-                {/* IoT Telemetry Badges */}
-                {device.iotTelemetry && (
-                  <div className="flex items-center gap-1 mt-0.5">
-                    {device.iotTelemetry.tempCelsius !== undefined && (
-                      <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-950/60 px-1 rounded border border-amber-800/50">
-                        {device.iotTelemetry.tempCelsius.toFixed(1)}°C
+                {/* OLT TX Power */}
+                {node.type === 'olt' && (
+                  <div className="flex items-center justify-between font-mono text-emerald-700 font-bold">
+                    <span>Tx:</span>
+                    <span>+{node.opticalConfig?.txPowerDbm ?? 3.0} dBm</span>
+                  </div>
+                )}
+
+                {/* Splitter ratio badge */}
+                {node.type === 'splitter' && (
+                  <div className="flex items-center justify-between text-slate-600 font-mono">
+                    <span>Rasio:</span>
+                    <span>{node.opticalConfig?.splitterRatio ?? '1:8'}</span>
+                  </div>
+                )}
+
+                {/* ONT WAN Mode and DHCP indicator */}
+                {node.type === 'ont' && (
+                  <>
+                    <div className="flex items-center justify-between font-mono">
+                      <span className="text-slate-500 font-normal">WAN:</span>
+                      <span className={node.ontConfig?.wanMode === 'bridge' ? 'text-amber-700 font-bold' : 'text-sky-700 font-bold'}>
+                        {node.ontConfig?.wanMode?.toUpperCase() || 'PPPOE'}
                       </span>
-                    )}
-                    {device.iotTelemetry.plugState && (
-                      <span
-                        className={`text-[8px] font-bold px-1 rounded ${
-                          device.iotTelemetry.plugState === 'ON' ? 'bg-emerald-950 text-emerald-400 border border-emerald-700' : 'bg-[var(--surface-2)] text-[var(--text-muted)]'
-                        }`}
-                      >
-                        {device.iotTelemetry.plugState}
+                    </div>
+                    <div className="flex items-center justify-between font-mono">
+                      <span className="text-slate-500 font-normal">DHCP:</span>
+                      <span className={node.ontConfig?.dhcpServerEnabled ? 'text-emerald-700 font-bold' : 'text-rose-600 font-bold'}>
+                        {node.ontConfig?.dhcpServerEnabled ? 'Aktif' : 'Mati'}
                       </span>
-                    )}
+                    </div>
+                  </>
+                )}
+
+                {/* IP address if configured */}
+                {node.ipConfig?.ip && node.ipConfig.ip !== '0.0.0.0' && node.type !== 'ont' && (
+                  <div className="flex items-center justify-between text-slate-600 font-mono truncate">
+                    <span>IP:</span>
+                    <span className="truncate">{node.ipConfig.ip}</span>
+                  </div>
+                )}
+
+                {/* Client Internet Status Indicator */}
+                {isClientDevice && node.poweredOn && (
+                  <div className="flex items-center justify-between font-mono font-bold">
+                    <span className="text-slate-500 font-normal">Internet:</span>
+                    <span className={netAccess.hasInternet ? 'text-emerald-600' : 'text-rose-600'}>
+                      {netAccess.hasInternet ? '● Online' : '✕ Putus'}
+                    </span>
+                  </div>
+                )}
+
+                {/* VLAN Tag Indicator if configured */}
+                {node.vlanConfig?.enabled && (
+                  <div className="flex items-center justify-between font-mono text-[9px] text-indigo-700 font-bold">
+                    <span className="text-slate-500 font-normal">VLAN:</span>
+                    <span>ID {node.vlanConfig.vlanId}</span>
+                  </div>
+                )}
+
+                {/* HTB Role */}
+                {node.type === 'htb' && (
+                  <div className="flex items-center justify-between font-mono font-bold text-purple-700">
+                    <span>Tipe:</span>
+                    <span>HTB-{node.htbRole || 'A'}</span>
                   </div>
                 )}
               </div>
@@ -722,89 +1019,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
           );
         })}
       </div>
-
-      {/* Floating Canvas Controls (Bottom Right) */}
-      <div className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-[var(--surface-1)]/90 border border-[var(--border-2)] rounded-xl p-1.5 shadow-2xl backdrop-blur-md text-xs text-[var(--text-secondary)]">
-        <button
-          onClick={() => setZoom((z) => Math.min(2.5, z * 1.2))}
-          className="p-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] rounded-lg transition-colors"
-          title="Perbesar (Zoom In)"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </button>
-
-        <span className="text-[11px] font-mono px-1.5 text-[var(--text-muted)] min-w-10 text-center">
-          {Math.round(zoom * 100)}%
-        </span>
-
-        <button
-          onClick={() => setZoom((z) => Math.max(0.4, z * 0.8))}
-          className="p-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] rounded-lg transition-colors"
-          title="Perkecil (Zoom Out)"
-        >
-          <ZoomOut className="w-4 h-4" />
-        </button>
-
-        <div className="h-4 w-[1px] bg-[var(--surface-2)] mx-0.5" />
-
-        <button
-          onClick={handleFitView}
-          className="p-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] rounded-lg transition-colors"
-          title="Pusatkan Seluruh Topologi (Fit to Screen)"
-        >
-          <Maximize2 className="w-4 h-4" />
-        </button>
-
-        <button
-          onClick={() => {
-            setZoom(1);
-            setPan({ x: 0, y: 0 });
-          }}
-          className="p-1.5 hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] rounded-lg transition-colors"
-          title="Reset Sudut Pandang (100%)"
-        >
-          <Move className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Selected Action Quick Toolbar (Top Center) */}
-      {(selectedDeviceId || selectedLinkId) && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-[var(--surface-1)]/95 border border-[var(--border-2)] rounded-xl px-3 py-1.5 shadow-2xl backdrop-blur-md flex items-center gap-3 text-xs text-[var(--text-secondary)] animate-in fade-in slide-in-from-top-2">
-          {selectedDeviceId && (
-            <>
-              <span className="font-semibold text-[var(--text-primary)]">
-                {devices.find((d) => d.id === selectedDeviceId)?.name}
-              </span>
-              <button
-                onClick={() => {
-                  const dev = devices.find((d) => d.id === selectedDeviceId);
-                  if (dev) onDeviceDoubleClick(dev);
-                }}
-                className="flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
-              >
-                <Settings className="w-3.5 h-3.5" />
-                <span>Konfigurasi</span>
-              </button>
-            </>
-          )}
-
-          {selectedLinkId && (
-            <span className="font-semibold text-[var(--text-secondary)]">
-              Kabel: {links.find((l) => l.id === selectedLinkId)?.cableType.replace('_', ' ')}
-            </span>
-          )}
-
-          <div className="h-4 w-[1px] bg-[var(--surface-2)]" />
-
-          <button
-            onClick={onDeleteSelected}
-            className="flex items-center gap-1 text-red-400 hover:text-red-300 hover:bg-red-950/40 px-2 py-1 rounded-lg transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Hapus</span>
-          </button>
-        </div>
-      )}
     </div>
   );
 });
