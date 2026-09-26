@@ -18,6 +18,7 @@ import { DEVICE_BRANDS } from './data/deviceBrands';
 import { calculateOpticalPowers } from './utils/opticalCalculator';
 import { runNetworkDiagnostics } from './utils/diagnosticEngine';
 import { planPing } from './utils/pingTool';
+import { findFreeSlot } from './utils/nodePlacement';
 import type { HistoryState } from './utils/historyCore';
 import { canRedo as stackCanRedo, canUndo as stackCanUndo, createHistory, pushSnapshot, redo as stackRedo, undo as stackUndo } from './utils/historyCore';
 import { toPng } from 'html-to-image';
@@ -176,6 +177,7 @@ export default function App() {
     const defaultBrand = brandsForType[0]?.brand || '';
     const defaultModel = brandsForType[0]?.models[0] || meta.name;
     const displayName = `${meta.name.split('(')[0].trim()} ${countSameType + 1}`;
+    const slot = findFreeSlot(nodes.map((n) => ({ x: n.x, y: n.y })));
 
     const newNode: NetworkNode = {
       id: newId,
@@ -184,8 +186,11 @@ export default function App() {
       label: defaultModel,
       brand: defaultBrand,
       model: defaultModel,
-      x: 200 + (nodes.length % 5) * 60,
-      y: 160 + (nodes.length % 4) * 40,
+      // First grid slot that collides with nothing already on the canvas. The
+      // old arithmetic stepped 60px against a 132px card and repeated every 20
+      // devices, so new devices covered their neighbours and node 21 landed
+      // exactly on node 1.
+      ...slot,
       poweredOn: true,
       status: 'online',
       ports: meta.defaultPorts.map((p, idx) => ({
