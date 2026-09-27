@@ -1828,24 +1828,63 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 Daftar Port Fisik ({node.ports.length} Port):
               </span>
               <div className="space-y-1.5">
-                {node.ports.map((port) => (
-                  <div
-                    key={port.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 text-[11px]"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`h-2 w-2 rounded-full ${
-                          port.status === 'up' ? 'bg-emerald-500' : 'bg-slate-300'
-                        }`}
-                      />
-                      <span className="font-semibold text-slate-800">{port.name}</span>
+                {node.ports.map((port) => {
+                  // `port.status` is the administrative/link-negotiation state
+                  // ("up"/"down") and says nothing about whether a cable is
+                  // physically plugged in -- `connectedCableId` is the only
+                  // field that records that. A port could be status "up" with
+                  // no cable at all, or "down" while a cable sits in it, and
+                  // this table used to collapse both onto one green/grey dot,
+                  // so there was no way to tell an empty port from a live one
+                  // at a glance. Two independent indicators now: which cable
+                  // (if any) occupies the port, and its up/down state.
+                  const plugCable = port.connectedCableId
+                    ? allCables.find((c) => c.id === port.connectedCableId)
+                    : undefined;
+                  const isPlugged = !!plugCable;
+                  const peerId = plugCable
+                    ? (plugCable.fromNodeId === node.id ? plugCable.toNodeId : plugCable.fromNodeId)
+                    : undefined;
+                  const peerNode = peerId ? allNodes.find((n) => n.id === peerId) : undefined;
+
+                  return (
+                    <div
+                      key={port.id}
+                      className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100 text-[11px] gap-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          title={port.status === 'up' ? 'Status Link: Up' : 'Status Link: Down'}
+                          className={`h-2 w-2 rounded-full shrink-0 ${
+                            port.status === 'up' ? 'bg-emerald-500' : 'bg-slate-300'
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <span className="font-semibold text-slate-800 block truncate">{port.name}</span>
+                          <span className={`block text-[10px] truncate ${isPlugged ? 'text-sky-700' : 'text-amber-600'}`}>
+                            {isPlugged
+                              ? `Terpasang Kabel -> ${peerNode?.name || 'Perangkat Lain'}`
+                              : 'Port Kosong (Belum Ada Kabel)'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span
+                          className={`font-mono text-[10px] uppercase px-1.5 py-0.5 rounded border ${
+                            isPlugged
+                              ? 'text-sky-700 bg-sky-50 border-sky-200'
+                              : 'text-amber-700 bg-amber-50 border-amber-200'
+                          }`}
+                        >
+                          {isPlugged ? 'Terisi' : 'Kosong'}
+                        </span>
+                        <span className="font-mono text-[10px] uppercase text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
+                          {port.medium}
+                        </span>
+                      </div>
                     </div>
-                    <span className="font-mono text-[10px] uppercase text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
-                      {port.medium}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>

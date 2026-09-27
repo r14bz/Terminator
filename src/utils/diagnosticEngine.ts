@@ -379,6 +379,11 @@ export function runNetworkDiagnostics(
           id: `loop-${swA.id}-${swB.id}`,
           severity: 'critical',
           title: `Bahaya Switching Loop / Broadcast Storm antara ${swA.name} dan ${swB.name}`,
+          // Needed so the auto-fix feature can locate which switch to prune
+          // extra cables from without parsing switch ids back out of the
+          // issue id (node ids themselves may contain dashes, so that split
+          // would be ambiguous).
+          targetNodeId: swA.id,
           category: 'topology',
           cause: `Terdapat lebih dari satu kabel LAN yang menghubungkan kedua switch ini secara paralel tanpa konfigurasi STP (Spanning Tree Protocol) atau LACP Bonding. Paket broadcast akan berputar selamanya dan melumpuhkan CPU switch.`,
           solution: `Cabut salah satu kabel LAN penghubung antar switch tersebut, atau aktifkan fitur RSTP / LACP Link Aggregation.`,
@@ -444,6 +449,7 @@ export function runNetworkDiagnostics(
               severity: 'critical',
               title: `VLAN ${vlanFrom.vlanId} (${fromNode.name}) Ditolak oleh Port Trunk ${toNode.name}`,
               targetNodeId: fromNode.id,
+              targetCableId: cable.id,
               category: 'configuration',
               cause: `Port Trunk pada ${toNode.name} hanya mengizinkan VLAN [${allowed.join(', ')}]. Frame dari ${fromNode.name} (VLAN ${vlanFrom.vlanId}) akan didrop pada port switch.`,
               solution: `Tambahkan VLAN ${vlanFrom.vlanId} ke daftar Allowed VLANs pada ${toNode.name}.`,
@@ -457,6 +463,7 @@ export function runNetworkDiagnostics(
               severity: 'critical',
               title: `VLAN ${vlanTo.vlanId} (${toNode.name}) Ditolak oleh Port Trunk ${fromNode.name}`,
               targetNodeId: toNode.id,
+              targetCableId: cable.id,
               category: 'configuration',
               cause: `Port Trunk pada ${fromNode.name} hanya mengizinkan VLAN [${allowed.join(', ')}]. Frame dari ${toNode.name} (VLAN ${vlanTo.vlanId}) akan didrop pada port switch.`,
               solution: `Tambahkan VLAN ${vlanTo.vlanId} ke daftar Allowed VLANs pada ${fromNode.name}.`,

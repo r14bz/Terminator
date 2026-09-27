@@ -371,4 +371,45 @@ const statusOf = (t, id) => checkInternetAccess(t.nodes.find((x) => x.id === id)
   ok('klien di belakang router biasa: tidak ada alasan yang dikembalikan', s.reason === undefined);
 }
 
+// ---- HTB media-converter pair: fiber leg must not block the walk ----------
+// A `drop_core` fiber cable between an HTB-A/HTB-B pair used to be outside the
+// medium filter findUpstreamGateway walks, so a client behind an HTB link
+// (switch -> HTB-B -> fiber -> HTB-A -> router) was reported as having no
+// gateway at all, and every IP/subnet/gateway check downstream of that lookup
+// was silently skipped for it. This pins the fix: the fiber leg is Layer 1
+// and must be crossed exactly like a LAN cable would be.
+{
+  const htbTopology = (clientIp = '10.20.30.55', clientGw = '10.20.30.1') => ({
+    nodes: [
+      node('inet', 'internet'),
+      node('rtr', 'mikrotik', { ipConfig: { mode: 'static', ip: '10.20.30.1', subnet: '255.255.255.0', isDhcpServerEnabled: true }, mikrotikConfig: { ...RTR_CFG } }),
+      node('htbA', 'htb', { htbRole: 'A' }),
+      node('htbB', 'htb', { htbRole: 'B' }),
+      node('sw', 'switch'),
+      node('pc', 'pc', { ipConfig: { mode: 'static', ip: clientIp, subnet: '255.255.255.0', gateway: clientGw, dns: '8.8.8.8' } }),
+    ],
+    cables: [
+      cable('inet', 'rtr'),
+      cable('rtr', 'htbA'),
+      cable('htbA', 'htbB', { type: 'drop_core', medium: 'fiber' }),
+      cable('htbB', 'sw'),
+      cable('sw', 'pc'),
+    ],
+  });
+
+  const healthyHtb = htbTopology();
+  const gw = findUpstreamGateway(healthyHtb.nodes.find((n) => n.id === 'pc'), healthyHtb.nodes, healthyHtb.cables);
+  ok('HTB: BFS melintasi kabel fiber drop_core antara pasangan HTB', gw?.id === 'rtr');
+
+  const healthyStatus = statusOf(healthyHtb, 'pc');
+  ok('HTB: klien dengan IP benar di balik HTB terdeteksi online', healthyStatus.hasInternet === true);
+
+  const misconfigured = htbTopology('192.168.99.55', '192.168.99.1');
+  const badStatus = statusOf(misconfigured, 'pc');
+  ok('HTB: klien dengan subnet salah di balik HTB TIDAK dianggap online', badStatus.hasInternet === false);
+  ok('HTB: alasannya adalah gateway/subnet yang salah, bukan "tidak terhubung"',
+    typeof badStatus.reason === 'string' && !badStatus.reason.includes('Tidak terhubung ke router gateway'));
+  ok('HTB: gateway hulu tetap ditemukan meski konfigurasi klien salah', badStatus.gatewayNode?.id === 'rtr');
+}
+
 console.log(`ok — ${n} assertions passed`);

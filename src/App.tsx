@@ -12,13 +12,14 @@ import { OPMFloatingTool } from './components/OPMFloatingTool';
 import { GlossaryModal } from './components/GlossaryModal';
 import { TemplateModal } from './components/TemplateModal';
 
-import type { NetworkNode, CableConnection, NodeCableType, NodeType, ActiveTool, DevicePort, PortMedium } from './types/network';
+import type { NetworkNode, CableConnection, NodeCableType, NodeType, ActiveTool, DevicePort, PortMedium, DiagnosticIssue } from './types/network';
 import type { TopologyTemplate } from './data/templates';
 import { TOPOLOGY_TEMPLATES } from './data/templates';
 import { DEVICE_METADATA } from './data/deviceDefinitions';
 import { DEVICE_BRANDS } from './data/deviceBrands';
 import { calculateOpticalPowers } from './utils/opticalCalculator';
 import { runNetworkDiagnostics } from './utils/diagnosticEngine';
+import { applyAutoFix, isAutoFixable } from './utils/autoFix';
 import { planPing } from './utils/pingTool';
 import { findFreeSlot } from './utils/nodePlacement';
 import { mediumForCable, reconcilePorts, synthesisePort } from './utils/portReconcile';
@@ -200,6 +201,60 @@ export default function App() {
   const issues = useMemo(() => {
     return runNetworkDiagnostics(nodes, cables, opticalResults);
   }, [nodes, cables, opticalResults]);
+
+  // Auto-fix a single diagnosed issue.
+  //
+  // `applyAutoFix` is pure -- it only computes what the repaired nodes/cables
+  // would look like, off the *live* `nodes`/`cables` state at the moment the
+  // button is pressed rather than whatever `issues` (a memo) captured last
+  // render, so a fix always acts on the current topology even if several
+  // issues are resolved back-to-back in quick succession. Landing the result
+  // through the normal setNodes/setCables setters is what makes it show up
+  // in the undo history for free, exactly like a manual edit would.
+  const handleAutoFix = (issue: DiagnosticIssue) => {
+    const result = applyAutoFix(issue, nodes, cables);
+    if (!result) {
+      showToast('⚠️ Masalah ini perlu ditinjau manual, belum bisa diperbaiki otomatis.');
+      return;
+    }
+    setNodes(result.nodes);
+    setCables(result.cables);
+    showToast(`✓ ${result.summary}`);
+  };
+
+  // Auto-fix every fixable issue in one pass.
+  //
+  // Re-diagnoses from scratch after each individual fix rather than working
+  // off one stale `issues` list: fixing one problem (say, an HTB role clash)
+  // can make a different issue disappear on its own, or -- for the id-conflict
+  // check -- leave the *same* issue id pointing at a different pair of nodes.
+  // Capped at 25 rounds so a fix that can't actually make its own issue go
+  // away (a latent bug in a handler) reports what it managed instead of
+  // hanging the tab.
+  const handleAutoFixAll = () => {
+    let curNodes = nodes;
+    let curCables = cables;
+    let fixedCount = 0;
+
+    for (let round = 0; round < 25; round++) {
+      const currentIssues = runNetworkDiagnostics(curNodes, curCables, calculateOpticalPowers(curNodes, curCables));
+      const nextFixable = currentIssues.find((iss) => isAutoFixable(iss));
+      if (!nextFixable) break;
+      const result = applyAutoFix(nextFixable, curNodes, curCables);
+      if (!result) break;
+      curNodes = result.nodes;
+      curCables = result.cables;
+      fixedCount++;
+    }
+
+    if (fixedCount === 0) {
+      showToast('Tidak ada masalah yang bisa diperbaiki otomatis saat ini.');
+      return;
+    }
+    setNodes(curNodes);
+    setCables(curCables);
+    showToast(`✓ ${fixedCount} masalah berhasil diperbaiki otomatis.`);
+  };
 
   // Add new device to canvas
   const handleAddDevice = (type: NodeType) => {
@@ -683,6 +738,8 @@ export default function App() {
           setSelectedNodeId(nodeId);
           setIsTroubleshootingOpen(false);
         }}
+        onAutoFix={handleAutoFix}
+        onAutoFixAll={handleAutoFixAll}
       />
 
       {/* Interactive Terminal CLI Modal */}

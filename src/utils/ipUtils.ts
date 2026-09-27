@@ -76,8 +76,31 @@ export function isSameSubnet(ip1: string, ip2: string, mask: string = '255.255.2
 }
 
 /**
- * Trace through physical connections (LAN, Wireless) through switches, media converters, and mesh
- * to find the upstream Layer 3 Gateway / Router (e.g. ONT, MikroTik, or Router)
+ * Trace through every physical link -- LAN, Wireless, Coaxial, and the fiber
+ * legs (feeder/distribusi/drop_core) -- through switches, splitters (ODC/ODP),
+ * and media converters (HTB) to find the upstream Layer 3 Gateway / Router
+ * (e.g. ONT, MikroTik, or Router).
+ *
+ * The medium filter used to stop at `['lan', 'wireless', 'coaxial']`, which
+ * excludes every fiber cable type. That is correct for the link *into* a
+ * router/ONT (BFS already returns as soon as it reaches one, without needing
+ * to look at its far side), but wrong for anything upstream of it: an HTB
+ * media-converter pair is a pure Layer 1 device connected to its partner by a
+ * `drop_core` fiber cable, so a client sitting behind
+ * switch -> HTB-B -> (fiber) -> HTB-A -> router had its BFS die at HTB-B --
+ * the very next hop was the one type of cable this function refused to cross.
+ * `findUpstreamGateway` returned null for a client that was, physically,
+ * completely wired up, and every IP/gateway/subnet check downstream of it
+ * (Check 9 in diagnosticEngine, and `checkInternetAccess` below) silently
+ * skipped that client instead of validating its configuration -- so a wrong
+ * IP behind an HTB link never got flagged, and a correct one was reported as
+ * having no route out. This reproduces on the shipped "RT/RW-Net Media
+ * Converter (HTB)" template itself, not just a hand-built topology.
+ *
+ * No other node type in this app performs Layer 3 routing, so every non
+ * router/ONT/MikroTik node (switch, HTB, ODC, ODP, OLT, splitter, or a leaf
+ * client) is correctly transparent to this walk regardless of which medium
+ * connects it to its neighbour.
  */
 export function findUpstreamGateway(
   startNode: NetworkNode,
@@ -103,11 +126,10 @@ export function findUpstreamGateway(
       return currentNode;
     }
 
-    // Find all directly connected active cables (LAN, Wireless, or HTB)
+    // Find all directly connected, non-broken cables of any physical medium.
     const connectedCables = allCables.filter(
       (c) =>
         c.status !== 'broken' &&
-        ['lan', 'wireless', 'coaxial'].includes(c.type) &&
         (c.fromNodeId === currentId || c.toNodeId === currentId)
     );
 

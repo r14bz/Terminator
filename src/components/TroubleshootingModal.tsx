@@ -8,14 +8,21 @@ import {
   Wrench,
   HelpCircle,
   Lightbulb,
+  Sparkles,
+  WandSparkles,
 } from 'lucide-react';
 import type { DiagnosticIssue } from '../types/network';
+import { isAutoFixable } from '../utils/autoFix';
 
 interface TroubleshootingModalProps {
   isOpen: boolean;
   onClose: () => void;
   issues: DiagnosticIssue[];
   onFocusNode: (nodeId: string) => void;
+  /** Repair one issue in place; App re-diagnoses and re-renders with the result. */
+  onAutoFix: (issue: DiagnosticIssue) => void;
+  /** Repair every fixable issue currently showing, one round of re-diagnosis at a time. */
+  onAutoFixAll: () => void;
 }
 
 export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({
@@ -23,10 +30,14 @@ export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({
   onClose,
   issues,
   onFocusNode,
+  onAutoFix,
+  onAutoFixAll,
 }) => {
   const [filter, setFilter] = useState<'all' | 'critical' | 'warning'>('all');
 
   if (!isOpen) return null;
+
+  const fixableCount = issues.filter((i) => isAutoFixable(i)).length;
 
   const criticalIssues = issues.filter((i) => i.severity === 'critical');
   const warningIssues = issues.filter((i) => i.severity === 'warning');
@@ -98,9 +109,20 @@ export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({
             </button>
           </div>
 
-          <div className="text-xs text-slate-500 hidden sm:block">
-            {issues.length === 0 ? 'Kondisi Sempurna' : 'Perlu Perbaikan'}
-          </div>
+          {fixableCount > 0 ? (
+            <button
+              onClick={onAutoFixAll}
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors shadow-2xs shrink-0"
+              title="Perbaiki semua masalah yang bisa diperbaiki otomatis"
+            >
+              <WandSparkles className="h-3.5 w-3.5" />
+              <span>Perbaiki Semua ({fixableCount})</span>
+            </button>
+          ) : (
+            <div className="text-xs text-slate-500 hidden sm:block">
+              {issues.length === 0 ? 'Kondisi Sempurna' : 'Perlu Perbaikan'}
+            </div>
+          )}
         </div>
 
         {/* Issue Cards List */}
@@ -157,19 +179,31 @@ export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({
                     </div>
                   </div>
 
-                  {issue.targetNodeId && (
-                    <button
-                      onClick={() => {
-                        onFocusNode(issue.targetNodeId!);
-                        onClose();
-                      }}
-                      className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50 hover:border-sky-300 transition-colors shrink-0 shadow-2xs"
-                      title="Lihat dan pilih node ini di kanvas"
-                    >
-                      <span>Sorot Node</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </button>
-                  )}
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    {isAutoFixable(issue) && (
+                      <button
+                        onClick={() => onAutoFix(issue)}
+                        className="flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 transition-colors shadow-2xs"
+                        title="Perbaiki masalah ini secara otomatis"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        <span>Perbaiki Otomatis</span>
+                      </button>
+                    )}
+                    {issue.targetNodeId && (
+                      <button
+                        onClick={() => {
+                          onFocusNode(issue.targetNodeId!);
+                          onClose();
+                        }}
+                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-sky-700 hover:bg-sky-50 hover:border-sky-300 transition-colors shadow-2xs"
+                        title="Lihat dan pilih node ini di kanvas"
+                      >
+                        <span>Sorot Node</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Body explanation: Cause & Solution */}
