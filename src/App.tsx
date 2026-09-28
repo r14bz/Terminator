@@ -11,6 +11,7 @@ import { TerminalModal } from './components/TerminalModal';
 import { OPMFloatingTool } from './components/OPMFloatingTool';
 import { GlossaryModal } from './components/GlossaryModal';
 import { TemplateModal } from './components/TemplateModal';
+import { NetworkAIChatModal } from './components/NetworkAIChatModal';
 
 import type { NetworkNode, CableConnection, NodeCableType, NodeType, ActiveTool, DevicePort, PortMedium, DiagnosticIssue } from './types/network';
 import type { TopologyTemplate } from './data/templates';
@@ -23,6 +24,7 @@ import { applyAutoFix, isAutoFixable } from './utils/autoFix';
 import { planPing } from './utils/pingTool';
 import { findFreeSlot } from './utils/nodePlacement';
 import { mediumForCable, reconcilePorts, synthesisePort } from './utils/portReconcile';
+import { validateCableConnection, getMediumDisplayName } from './utils/cableCompatibility';
 import { allocateStaticHost, gatewayAddressOf, primaryGateway } from './utils/ipAlloc';
 import { zoomIn, zoomOut } from './utils/zoom';
 import type { HistoryState } from './utils/historyCore';
@@ -173,7 +175,14 @@ export default function App() {
   const [isTroubleshootingOpen, setIsTroubleshootingOpen] = useState(false);
   const [isGlossaryOpen, setIsGlossaryOpen] = useState(false);
   const [isTemplateOpen, setIsTemplateOpen] = useState(false);
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false);
+  const [aiInitialPrompt, setAiInitialPrompt] = useState<string | undefined>(undefined);
   const [terminalNodeId, setTerminalNodeId] = useState<string | null>(null);
+
+  const handleOpenAiChat = (prompt?: string) => {
+    setAiInitialPrompt(prompt);
+    setIsAiChatOpen(true);
+  };
   // IP yang harus di-ping begitu terminal dibuka; null = terminal biasa.
   const [terminalPingIp, setTerminalPingIp] = useState<string | null>(null);
   const [probedNodeId, setProbedNodeId] = useState<string | null>(null);
@@ -310,7 +319,11 @@ export default function App() {
         type === 'olt'
           ? { txPowerDbm: 3.0, connectorType: 'SC/UPC' }
           : type === 'splitter'
-          ? { splitterRatio: '1:8' }
+          ? { splitterRatio: '1:8', attenuationDb: 10.5, connectorType: 'SC/UPC' }
+          : type === 'odc'
+          ? { splitterRatio: '1:4', attenuationDb: 7.2, connectorType: 'SC/UPC' }
+          : type === 'odp'
+          ? { splitterRatio: '1:8', attenuationDb: 10.5, connectorType: 'SC/UPC' }
           : type === 'ont'
           ? { rxPowerDbm: -19.0, connectorType: 'SC/UPC' }
           : undefined,
@@ -337,8 +350,99 @@ export default function App() {
             }
           : undefined,
       htbRole: type === 'htb' ? (countSameType % 2 === 0 ? 'A' : 'B') : undefined,
+      meshConfig:
+        type === 'mesh'
+          ? {
+              role: countSameType === 0 ? 'root' : 'satellite',
+              backhaulType: 'wireless_5ghz',
+              fastRoaming: true,
+              ssid: 'Mesh-WiFi-Home',
+              wifiKey: 'admin12345',
+              bandSteering: true,
+              rssiThresholdDbm: -70,
+              channel24G: 6,
+              channel5G: 44,
+            }
+          : undefined,
+      ptpConfig:
+        type === 'ap_ptp'
+          ? {
+              mode: countSameType % 2 === 0 ? 'ap_ptp' : 'station_ptp',
+              frequencyMhz: 5745,
+              channelWidthMhz: 80,
+              distanceKm: 1.5,
+              txPowerDbm: 23,
+              antennaGainDbi: 23,
+              ssid: 'PTP-LINK-TOWER',
+              securityKey: 'wpa2ptpsecret',
+              signalRssiDbm: -56,
+              linkQualityPercent: 99,
+            }
+          : undefined,
+      managedSwitchConfig:
+        type === 'switch_managed'
+          ? {
+              managementIp: '192.168.88.2',
+              managementSubnet: '255.255.255.0',
+              managementGateway: '192.168.88.1',
+              stpMode: 'rstp',
+              igmpSnooping: true,
+              lacpTrunkEnabled: false,
+              portMirroring: false,
+              poeBudgetWatts: 370,
+              poeUsageWatts: 30,
+              loopProtect: true,
+            }
+          : undefined,
+      accessPointConfig:
+        type === 'access_point'
+          ? {
+              ssid24: `Office-WiFi-${countSameType + 1}`,
+              ssid5: `Office-WiFi-5G-${countSameType + 1}`,
+              wifiKey: 'kantor12345',
+              channel24: 1,
+              channel5: 36,
+              poePowered: true,
+              vlanTagged: true,
+              vlanId: 20,
+              txPowerDbm: 20,
+              guestPortalEnabled: false,
+            }
+          : undefined,
+      firewallConfig:
+        type === 'firewall'
+          ? {
+              natEnabled: true,
+              ipsEnabled: true,
+              vpnServer: false,
+              wanFailover: true,
+              blockedPorts: [23, 445, 3389],
+              bandwidthShaping: true,
+            }
+          : undefined,
+      nasConfig:
+        type === 'nas'
+          ? {
+              raidLevel: 'RAID 5',
+              capacityTb: 16,
+              usedStorageTb: 4.2,
+              nfsSmbEnabled: true,
+              nvrRecording: true,
+              lacpBonding: true,
+            }
+          : undefined,
+      voipConfig:
+        type === 'voip_phone'
+          ? {
+              sipExtension: `100${countSameType + 1}`,
+              sipServerIp: lanGatewayIp ?? '192.168.1.200',
+              codec: 'G.711u',
+              voiceVlanId: 30,
+              status: 'registered',
+            }
+          : undefined,
       ipConfig:
-        ['pc', 'cctv', 'smartphone', 'iot', 'server', 'router'].includes(type)
+        ['pc', 'laptop', 'printer', 'voip_phone', 'cctv', 'smartphone', 'iot', 'server', 'router', 'mesh', 'ap_ptp', 'switch_managed', 'access_point', 'firewall', 'nas'].includes(type)
           ? {
               mode: 'static',
               // `null` means the pool is exhausted. Left as a constant .100 it
@@ -412,6 +516,18 @@ export default function App() {
     const toNode = nodes.find((n) => n.id === toNodeId);
     if (!fromNode || !toNode) return;
 
+    if (fromNodeId === toNodeId) {
+      const validation = validateCableConnection(fromNode, fromNode, cableType);
+      if (!validation.allowed) {
+        showToast(
+          `Koneksi Ditolak: ${validation.reason} ${validation.solutionHint ? `💡 Solusi: ${validation.solutionHint}` : ''}`
+        );
+      } else {
+        showToast(`Tidak dapat menghubungkan kabel ke perangkat yang sama.`);
+      }
+      return;
+    }
+
     // Check if duplicate connection
     const alreadyConnected = cables.some(
       (c) =>
@@ -423,25 +539,41 @@ export default function App() {
       return;
     }
 
+    // Physical medium and connector hardware validation
+    const validation = validateCableConnection(fromNode, toNode, cableType);
+    if (!validation.allowed) {
+      showToast(
+        `Koneksi Ditolak: ${validation.reason} ${validation.solutionHint ? `💡 Solusi: ${validation.solutionHint}` : ''}`
+      );
+      return;
+    }
+
     // Required medium for selected cable. Shared with port reconciliation so
     // the medium a port is claimed for and the medium reconciliation searches
     // for cannot drift apart.
     const requiredMedium: PortMedium = mediumForCable(cableType);
 
-    // Claim a free port of the required medium, or synthesise a new one.
-    // NOTE: never push onto `node.ports` here — that array is owned by React
-    // state (and by the undo snapshots). The returned port is attached to the
-    // node immutably further down, once the cable id exists.
-    const claimPort = (node: NetworkNode, suffix: 'a' | 'b'): DevicePort => {
-      const free = node.ports.find((p) => p.medium === requiredMedium && !p.connectedCableId);
-      if (free) return { ...free };
-      return {
-        ...synthesisePort(node, requiredMedium, `${Date.now().toString(36)}-${suffix}`),
-      };
-    };
+    // Strict port availability enforcement: check if both nodes have an available port
+    const fromFreePort = fromNode.ports.find((p) => p.medium === requiredMedium && !p.connectedCableId);
+    if (!fromFreePort) {
+      const fromMediumPorts = fromNode.ports.filter((p) => p.medium === requiredMedium);
+      showToast(
+        `Port Penuh: Semua ${fromMediumPorts.length} port ${getMediumDisplayName(requiredMedium)} pada "${fromNode.name}" sudah terisi penuh (${fromMediumPorts.length}/${fromMediumPorts.length} terpakai). Cabut kabel yang ada atau tambahkan port baru di Node Inspector.`
+      );
+      return;
+    }
 
-    const fromPort = claimPort(fromNode, 'a');
-    const toPort = claimPort(toNode, 'b');
+    const toFreePort = toNode.ports.find((p) => p.medium === requiredMedium && !p.connectedCableId);
+    if (!toFreePort) {
+      const toMediumPorts = toNode.ports.filter((p) => p.medium === requiredMedium);
+      showToast(
+        `Port Penuh: Semua ${toMediumPorts.length} port ${getMediumDisplayName(requiredMedium)} pada "${toNode.name}" sudah terisi penuh (${toMediumPorts.length}/${toMediumPorts.length} terpakai). Cabut kabel yang ada atau tambahkan port baru di Node Inspector.`
+      );
+      return;
+    }
+
+    const fromPort: DevicePort = { ...fromFreePort };
+    const toPort: DevicePort = { ...toFreePort };
 
     // Calculate approximate physical distance in km
     const dx = Math.abs(fromNode.x - toNode.x);
@@ -602,6 +734,16 @@ export default function App() {
     }
   };
 
+  const handleSelectNode = (nodeId: string | null) => {
+    setSelectedNodeId(nodeId);
+    if (nodeId) setSelectedCableId(null);
+  };
+
+  const handleSelectCable = (cableId: string | null) => {
+    setSelectedCableId(cableId);
+    if (cableId) setSelectedNodeId(null);
+  };
+
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
   const selectedCable = cables.find((c) => c.id === selectedCableId) || null;
   const probedNode = nodes.find((n) => n.id === probedNodeId) || null;
@@ -621,6 +763,7 @@ export default function App() {
         onOpenTroubleshooting={() => setIsTroubleshootingOpen(true)}
         onOpenGlossary={() => setIsGlossaryOpen(true)}
         onOpenTemplates={() => setIsTemplateOpen(true)}
+        onOpenAiChat={() => handleOpenAiChat()}
         onSaveImage={handleSaveTopologyImage}
         activeTool={activeTool}
         setActiveTool={setActiveTool}
@@ -660,12 +803,12 @@ export default function App() {
           cables={cables}
           opticalResults={opticalResults}
           selectedNodeId={selectedNodeId}
-          onSelectNode={setSelectedNodeId}
+          onSelectNode={handleSelectNode}
           onUpdateNodePosition={handleUpdateNodePosition}
           activeTool={activeTool}
           selectedCableType={selectedCableType}
           onConnectNodes={handleConnectNodes}
-          onSelectCable={setSelectedCableId}
+          onSelectCable={handleSelectCable}
           selectedCableId={selectedCableId}
           onDeleteCable={handleDeleteCable}
           onDeleteNode={handleDeleteNode}
@@ -698,6 +841,9 @@ export default function App() {
             connectedCables={cables.filter(
               (c) => c.fromNodeId === selectedNode.id || c.toNodeId === selectedNode.id
             )}
+            onDisconnectCable={handleDeleteCable}
+            onSelectCable={handleSelectCable}
+            onOpenAiChat={handleOpenAiChat}
           />
         )}
       </div>
@@ -740,6 +886,26 @@ export default function App() {
         }}
         onAutoFix={handleAutoFix}
         onAutoFixAll={handleAutoFixAll}
+        onOpenAiChat={handleOpenAiChat}
+      />
+
+      {/* AI Network Assistant & Diagnostic Chatbot Modal */}
+      <NetworkAIChatModal
+        isOpen={isAiChatOpen}
+        onClose={() => {
+          setIsAiChatOpen(false);
+          setAiInitialPrompt(undefined);
+        }}
+        nodes={nodes}
+        cables={cables}
+        issues={issues}
+        opticalResults={opticalResults}
+        initialPrompt={aiInitialPrompt}
+        selectedNode={selectedNode}
+        onFocusNode={(nodeId) => {
+          setSelectedNodeId(nodeId);
+          setIsAiChatOpen(false);
+        }}
       />
 
       {/* Interactive Terminal CLI Modal */}
