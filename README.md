@@ -55,57 +55,28 @@ Dilengkapi dengan kalkulator redaman kabel optik riil (**Optical Power Budget & 
 
 ---
 
-## 🛠️ Panduan Menjalankan Secara Lokal (Local Development)
+## 📦 Panduan Deploy ke Vercel via GitHub
 
-1. **Ekstrak File ZIP**:
-   Ekstrak file `terminator-network-simulator.zip` ke folder proyek Anda.
+Aplikasi ini dibangun menggunakan **Vite + React 19 + TypeScript + Tailwind CSS** tanpa dependensi server runtime khusus, sehingga dapat di-deploy secara instan di **Vercel**:
 
-2. **Install Dependensi**:
+1. **Upload ke GitHub**:
    ```bash
-   npm install
-   ```
-
-3. **Konfigurasi Environment Variable (.env)**:
-   Salin `.env.example` menjadi `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-   Buka file `.env` dan masukkan API Key Anda:
-   ```env
-   # Pilihan provider: "openrouter", "gemini", atau "opencode"
-   AI_PROVIDER="openrouter"
-
-   # Jika menggunakan OpenRouter:
-   OPENROUTER_API_KEY="sk-or-v1-xxxxxxxx..."
-   OPENROUTER_MODEL="deepseek/deepseek-chat"
-
-   # Jika menggunakan Google Gemini:
-   GEMINI_API_KEY="AIzaSyxxxx..."
-   ```
-
-4. **Jalankan Aplikasi**:
-   ```bash
-   npm run dev
-   ```
-   Buka browser di `http://localhost:3000`.
-
----
-
-## 📦 Panduan Push ke GitHub
-
-1. **Inisialisasi Git dan Push**:
-   ```bash
-   # Masuk ke direktori proyek yang sudah diekstrak
    git init
    git add .
-   git commit -m "feat: Terminator Network Simulator with OpenRouter & FTTH Engine"
+   git commit -m "Initial commit: Terminator Network Simulator"
    git branch -M main
    git remote add origin https://github.com/USERNAME/REPO_NAME.git
    git push -u origin main
    ```
-   *(Catatan: File `.env` yang berisi private API key Anda secara otomatis diabaikan oleh `.gitignore` sehingga aman dari kebocoran ke publik).*
 
-2. **Deploy di Vercel / Render / Cloud Run**:
-   - Hubungkan repositori GitHub Anda ke **Vercel** atau platform hosting pilihan Anda.
-   - Tambahkan Environment Variables di dashboard hosting (`AI_PROVIDER`, `OPENROUTER_API_KEY`, atau `GEMINI_API_KEY`).
-   - Selesai! Web simulator aktif secara online.
+2. **Deploy di Vercel**:
+   - Buka [vercel.com](https://vercel.com) dan login dengan akun GitHub Anda.
+   - Klik **"Add New..."** lalu pilih **"Project"**.
+   - Pilih repositori GitHub `REPO_NAME` yang baru saja Anda push.
+   - Vercel akan otomatis mendeteksi framework:
+     - **Framework Preset**: `Vite`
+     - **Build Command**: `npm run build`
+     - **Output Directory**: `dist`
+     - **Install Command**: `npm install`
+   - Klik **"Deploy"**.
+   - Dalam ~30 detik, web simulator Terminator sudah aktif online dan dapat diakses dari mana saja!

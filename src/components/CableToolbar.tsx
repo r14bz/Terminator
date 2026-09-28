@@ -48,7 +48,7 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
               ? 'bg-slate-900 text-white shadow-2xs'
               : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
           }`}
-          title="Klik node atau kabel untuk melihat detail, konfigurasi, dan status"
+          title="Klik node untuk melihat detail, konfigurasi IP, dan status port"
         >
           <MousePointer className="h-3.5 w-3.5" />
           <span>Pilih / Detail</span>
@@ -143,40 +143,36 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
         </button>
       </div>
 
-      {/* Cable Selector */}
-      <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-        <span className="text-[11px] font-medium text-slate-500 hidden sm:inline">
-          Tipe Kabel:
-        </span>
-        {(Object.keys(CABLE_METADATA) as NodeCableType[]).map((cableKey) => {
-          const meta = CABLE_METADATA[cableKey];
-          const isSelected = selectedCableType === cableKey && activeTool === 'cable';
-          return (
-            <button
-              key={cableKey}
-              onClick={() => {
-                setSelectedCableType(cableKey);
-                if (activeTool !== 'cable') {
-                  setActiveTool('cable');
-                  onCancelPing();
-                }
-              }}
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-all whitespace-nowrap border ${
-                isSelected
-                  ? 'border-sky-500 bg-sky-50 text-sky-900 font-semibold shadow-2xs'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-              }`}
-              title={`${meta.name}: ${meta.shortDesc} (Klik untuk hubungkan)`}
-            >
-              <span
-                className="h-2 w-2 rounded-full shrink-0"
-                style={{ backgroundColor: meta.colorHex }}
-              />
-              <span>{meta.name.split('(')[0]}</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Cable Selector if Cable tool is active */}
+      {activeTool === 'cable' && (
+        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+          <span className="text-[11px] font-medium text-slate-500 hidden sm:inline">
+            Tipe Kabel:
+          </span>
+          {(Object.keys(CABLE_METADATA) as NodeCableType[]).map((cableKey) => {
+            const meta = CABLE_METADATA[cableKey];
+            const isSelected = selectedCableType === cableKey;
+            return (
+              <button
+                key={cableKey}
+                onClick={() => setSelectedCableType(cableKey)}
+                className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-all whitespace-nowrap border ${
+                  isSelected
+                    ? 'border-sky-500 bg-sky-50 text-sky-900 font-semibold shadow-2xs'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                }`}
+                title={`${meta.name}: ${meta.shortDesc}`}
+              >
+                <span
+                  className="h-2 w-2 rounded-full shrink-0"
+                  style={{ backgroundColor: meta.colorHex }}
+                />
+                <span>{meta.name.split('(')[0]}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Status banner if connecting or pinging */}
       {connectingSourceNodeName && (

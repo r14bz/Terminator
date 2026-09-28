@@ -1,8 +1,6 @@
 import type { NetworkNode, CableConnection, DiagnosticIssue } from '../types/network';
 import type { OpticalCalculationResult } from './opticalCalculator';
-import { isValidIpv4, isSameSubnet, findUpstreamGateway, addressOf, findRouterConnectedToBridge } from './ipUtils';
-import { validateCableConnection } from './cableCompatibility';
-import { CABLE_METADATA } from '../data/cableDefinitions';
+import { isValidIpv4, isSameSubnet, findUpstreamGateway, addressOf } from './ipUtils';
 
 export function runNetworkDiagnostics(
   nodes: NetworkNode[],
@@ -65,60 +63,46 @@ export function runNetworkDiagnostics(
   for (const node of nodes) {
     if (node.type === 'ont') {
       const optResult = opticalResults.get(node.id);
-
-      // Check if ONT is deployed as a LAN-fed bridge (e.g. behind HTB / Switch / Router without fiber uplink)
-      const hasOpticalCable = cables.some(
-        (c) =>
-          ['feeder', 'distribusi', 'drop_core'].includes(c.type) &&
-          (c.fromNodeId === node.id || c.toNodeId === node.id)
-      );
-      const isLanFedBridge =
-        !hasOpticalCable &&
-        node.ontConfig?.wanMode === 'bridge' &&
-        cables.some((c) => (c.fromNodeId === node.id || c.toNodeId === node.id) && c.type === 'lan');
-
-      if (!isLanFedBridge) {
-        if (!optResult || optResult.status === 'disconnected') {
-          issues.push({
-            id: `ont-los-${node.id}`,
-            severity: 'critical',
-            title: `ONT "${node.name}" Mengalami Alarm LOS (Lampu Merah Kedip)`,
-            targetNodeId: node.id,
-            category: 'optical',
-            cause: `Tidak ada sinyal optik yang diterima dari OLT / ODP ke port PON modem ONT. Lampu indikator LOS menyala merah karena link fiber terputus.`,
-            solution: `Tarik kabel "Drop Core" dari port ODP tiang terdekat menuju port PON di ONT. Pastikan ODP terhubung ke ODC dan OLT sudah dinyalakan.`,
-          });
-        } else if (optResult.status === 'critical_los') {
-          issues.push({
-            id: `ont-attenuation-${node.id}`,
-            severity: 'critical',
-            title: `Redaman Optik Buruk (${optResult.rxPowerDbm} dBm) di ONT "${node.name}"`,
-            targetNodeId: node.id,
-            category: 'optical',
-            cause: `Daya terima optik (${optResult.rxPowerDbm} dBm) lebih buruk dari batas toleransi standar ITU-T G.984 (-27.0 dBm). Hal ini menyebabkan koneksi internet putus-nyambung atau gagal sinkronisasi PON.`,
-            solution: `Langkah Teknisi: 1. Cek tekukan kabel (macro-bending). 2. Bersihkan konektor SC/UPC dengan alkohol isopropil 99%. 3. Cek apakah ada splitter berantai yang terlalu banyak (misal 1:8 disambung ke 1:16). 4. Potong ulang ujung fiber dengan precision cleaver.`,
-          });
-        } else if (optResult.status === 'acceptable') {
-          issues.push({
-            id: `ont-marginal-${node.id}`,
-            severity: 'warning',
-            title: `Redaman Optik Mendekati Batas Kritis (${optResult.rxPowerDbm} dBm)`,
-            targetNodeId: node.id,
-            category: 'optical',
-            cause: `Daya terima optik berada pada rentang marjinal (-24 s/d -27 dBm). Koneksi masih berjalan, namun rentan drop jika suhu kabel naik atau cuaca buruk.`,
-            solution: `Lakukan pemeliharaan preventif: bersihkan adaptor ODP dan roset, serta pastikan tidak ada beban berlebih pada tarikan kabel drop.`,
-          });
-        } else if (optResult.status === 'overpower') {
-          issues.push({
-            id: `ont-overpower-${node.id}`,
-            severity: 'warning',
-            title: `Sinyal Optik Terlalu Kuat (Overpower > -8 dBm)`,
-            targetNodeId: node.id,
-            category: 'optical',
-            cause: `Daya terima optik (${optResult.rxPowerDbm} dBm) melebihi batas aman fotodioda receiver ONT. Hal ini biasanya terjadi jika ONT dicolok langsung ke OLT tanpa splitter pasif.`,
-            solution: `Pasang splitter optik (minimal 1:4 atau 1:8) atau pasang optical attenuator (misal 5dB / 10dB) agar sensor optik ONT tidak terbakar.`,
-          });
-        }
+      if (!optResult || optResult.status === 'disconnected') {
+        issues.push({
+          id: `ont-los-${node.id}`,
+          severity: 'critical',
+          title: `ONT "${node.name}" Mengalami Alarm LOS (Lampu Merah Kedip)`,
+          targetNodeId: node.id,
+          category: 'optical',
+          cause: `Tidak ada sinyal optik yang diterima dari OLT / ODP ke port PON modem ONT. Lampu indikator LOS menyala merah karena link fiber terputus.`,
+          solution: `Tarik kabel "Drop Core" dari port ODP tiang terdekat menuju port PON di ONT. Pastikan ODP terhubung ke ODC dan OLT sudah dinyalakan.`,
+        });
+      } else if (optResult.status === 'critical_los') {
+        issues.push({
+          id: `ont-attenuation-${node.id}`,
+          severity: 'critical',
+          title: `Redaman Optik Buruk (${optResult.rxPowerDbm} dBm) di ONT "${node.name}"`,
+          targetNodeId: node.id,
+          category: 'optical',
+          cause: `Daya terima optik (${optResult.rxPowerDbm} dBm) lebih buruk dari batas toleransi standar ITU-T G.984 (-27.0 dBm). Hal ini menyebabkan koneksi internet putus-nyambung atau gagal sinkronisasi PON.`,
+          solution: `Langkah Teknisi: 1. Cek tekukan kabel (macro-bending). 2. Bersihkan konektor SC/UPC dengan alkohol isopropil 99%. 3. Cek apakah ada splitter berantai yang terlalu banyak (misal 1:8 disambung ke 1:16). 4. Potong ulang ujung fiber dengan precision cleaver.`,
+        });
+      } else if (optResult.status === 'acceptable') {
+        issues.push({
+          id: `ont-marginal-${node.id}`,
+          severity: 'warning',
+          title: `Redaman Optik Mendekati Batas Kritis (${optResult.rxPowerDbm} dBm)`,
+          targetNodeId: node.id,
+          category: 'optical',
+          cause: `Daya terima optik berada pada rentang marjinal (-24 s/d -27 dBm). Koneksi masih berjalan, namun rentan drop jika suhu kabel naik atau cuaca buruk.`,
+          solution: `Lakukan pemeliharaan preventif: bersihkan adaptor ODP dan roset, serta pastikan tidak ada beban berlebih pada tarikan kabel drop.`,
+        });
+      } else if (optResult.status === 'overpower') {
+        issues.push({
+          id: `ont-overpower-${node.id}`,
+          severity: 'warning',
+          title: `Sinyal Optik Terlalu Kuat (Overpower > -8 dBm)`,
+          targetNodeId: node.id,
+          category: 'optical',
+          cause: `Daya terima optik (${optResult.rxPowerDbm} dBm) melebihi batas aman fotodioda receiver ONT. Hal ini biasanya terjadi jika ONT dicolok langsung ke OLT tanpa splitter pasif.`,
+          solution: `Pasang splitter optik (minimal 1:4 atau 1:8) atau pasang optical attenuator (misal 5dB / 10dB) agar sensor optik ONT tidak terbakar.`,
+        });
       }
     }
   }
@@ -328,8 +312,12 @@ export function runNetworkDiagnostics(
           findUpstreamGateway(n, nodes, cables)?.id === node.id
       );
 
-      const secondaryRouter = findRouterConnectedToBridge(node, nodes, cables);
-      const hasSecondaryRouter = Boolean(secondaryRouter && secondaryRouter.poweredOn);
+      const hasSecondaryRouter = cables.some((c) => {
+        if (c.status === 'broken' || c.type !== 'lan') return false;
+        const otherId = c.fromNodeId === node.id ? c.toNodeId : c.fromNodeId;
+        const otherNode = nodes.find((n) => n.id === otherId);
+        return otherNode?.type === 'mikrotik' && otherNode.poweredOn;
+      });
 
       if (!hasSecondaryRouter && clientNodes.length > 0) {
         issues.push({
@@ -483,31 +471,6 @@ export function runNetworkDiagnostics(
           }
         }
       }
-    }
-  }
-
-  // Check 13: Physical Medium & Connector Compatibility Check
-  for (const cable of cables) {
-    if (cable.status === 'broken') continue;
-    const fromNode = nodes.find((n) => n.id === cable.fromNodeId);
-    const toNode = nodes.find((n) => n.id === cable.toNodeId);
-    if (!fromNode || !toNode) continue;
-
-    const validation = validateCableConnection(fromNode, toNode, cable.type);
-    if (!validation.allowed) {
-      const targetNodeId = validation.incompatibleNodeId || fromNode.id;
-      const targetNode = nodes.find((n) => n.id === targetNodeId) || fromNode;
-      const cableMeta = CABLE_METADATA[cable.type];
-      issues.push({
-        id: `physical-mismatch-${cable.id}`,
-        severity: 'critical',
-        title: `Inkompatibilitas Media Fisik: ${cableMeta?.name || cable.type} pada ${targetNode.name}`,
-        targetCableId: cable.id,
-        targetNodeId,
-        category: 'physical',
-        cause: validation.reason || `Kabel ${cableMeta?.name || cable.type} tidak cocok dengan spesifikasi port fisik ${targetNode.name}.`,
-        solution: validation.solutionHint || `Ganti tipe kabel atau pasang perangkat pengubah media converter (HTB / Modem ONT).`,
-      });
     }
   }
 

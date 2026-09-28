@@ -10,7 +10,6 @@ import {
   Lightbulb,
   Sparkles,
   WandSparkles,
-  Bot,
 } from 'lucide-react';
 import type { DiagnosticIssue } from '../types/network';
 import { isAutoFixable } from '../utils/autoFix';
@@ -24,8 +23,6 @@ interface TroubleshootingModalProps {
   onAutoFix: (issue: DiagnosticIssue) => void;
   /** Repair every fixable issue currently showing, one round of re-diagnosis at a time. */
   onAutoFixAll: () => void;
-  /** Open AI chat with an optional prefilled prompt */
-  onOpenAiChat?: (prompt?: string) => void;
 }
 
 export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({
@@ -35,7 +32,6 @@ export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({
   onFocusNode,
   onAutoFix,
   onAutoFixAll,
-  onOpenAiChat,
 }) => {
   const [filter, setFilter] = useState<'all' | 'critical' | 'warning'>('all');
 
@@ -131,35 +127,6 @@ export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({
 
         {/* Issue Cards List */}
         <div className="flex-1 overflow-y-auto p-5 space-y-3.5 bg-slate-50/50">
-          {/* AI Advisor Banner */}
-          {onOpenAiChat && (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-sky-200 bg-linear-to-r from-sky-50 via-indigo-50/40 to-sky-50 p-3 shadow-2xs">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-600 text-white shadow-2xs shrink-0">
-                  <Bot className="h-4 w-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-900 leading-tight">
-                    Konsultasi & Diagnosa AI Mendalam (Gemini 3.8 Flash)
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    Dapatkan analisa akar masalah, audit ITU-T G.984, dan perintah CLI otomatis dari AI
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  onOpenAiChat();
-                  onClose();
-                }}
-                className="flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-sky-700 transition-colors shadow-2xs shrink-0"
-              >
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Buka AI Asisten</span>
-              </button>
-            </div>
-          )}
-
           {issues.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-3 shadow-xs">
@@ -171,18 +138,6 @@ export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({
               <p className="mt-1 max-w-sm text-xs text-slate-500 leading-relaxed">
                 Tidak ada kabel putus, redaman optik PON berada dalam batas aman ITU-T G.984, tidak ada loop switch, dan rute IP valid.
               </p>
-              {onOpenAiChat && (
-                <button
-                  onClick={() => {
-                    onOpenAiChat('Lakukan audit komprehensif terhadap arsitektur topologi jaringan ini dan berikan saran optimasi.');
-                    onClose();
-                  }}
-                  className="mt-4 flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-100 transition-colors"
-                >
-                  <Bot className="h-3.5 w-3.5 text-sky-600" />
-                  <span>Audit Arsitektur dengan AI</span>
-                </button>
-              )}
             </div>
           ) : filteredIssues.length === 0 ? (
             <div className="py-12 text-center text-xs text-slate-500">
@@ -224,22 +179,7 @@ export const TroubleshootingModal: React.FC<TroubleshootingModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-                    {onOpenAiChat && (
-                      <button
-                        onClick={() => {
-                          onOpenAiChat(
-                            `Bagaimana solusi teknis mendalam dan skrip konfigurasi untuk mengatasi masalah: "${issue.title}" (${issue.category})?\n\nGejala/Penyebab: ${issue.cause}\nSolusi dasar: ${issue.solution}`
-                          );
-                          onClose();
-                        }}
-                        className="flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50 px-2 py-1 text-[11px] font-semibold text-purple-700 hover:bg-purple-100 hover:border-purple-300 transition-colors shadow-2xs"
-                        title="Tanyakan solusi mendalam dan panduan CLI ke Gemini AI"
-                      >
-                        <Bot className="h-3 w-3 text-purple-600" />
-                        <span>Tanya AI</span>
-                      </button>
-                    )}
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
                     {isAutoFixable(issue) && (
                       <button
                         onClick={() => onAutoFix(issue)}

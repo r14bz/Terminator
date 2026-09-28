@@ -1,32 +1,8 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
-import {
-  Globe,
-  Radio,
-  Server,
-  Layers,
-  Box,
-  Share2,
-  Cpu,
-  Monitor,
-  Camera,
-  Smartphone,
-  Zap,
-  AlertCircle,
-  Move,
-  Cable as Grid,
-  Tag,
-  Wifi,
-  Shield,
-  HardDrive,
-  Laptop,
-  Printer,
-  Phone,
-} from 'lucide-react';
+import { Globe, Radio, Server, Layers, Box, Share2, Cpu, Monitor, Camera, Smartphone, Zap, AlertCircle, Move, Cable as Grid, Tag } from 'lucide-react';
 import type { NetworkNode, CableConnection, NodeCableType, SimulationPacket, ActiveTool, DiagnosticIssue } from '../types/network';
 import type { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { CABLE_METADATA } from '../data/cableDefinitions';
-import { nodeSupportsMedium } from '../utils/cableCompatibility';
-import { mediumForCable } from '../utils/portReconcile';
 import { buildInternetAccessMap } from '../utils/internetAccessMap';
 import { boundsOf, clampZoom, computeFitView } from '../utils/zoom';
 import { CARD_MAX_HEIGHT, CARD_WIDTH } from '../utils/nodePlacement';
@@ -419,12 +395,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
       onProbeOpm(node.id);
     } else if (activeTool === 'cable') {
       if (!connectingSourceNodeId) {
-        // If this node does not support the selected cable medium, trigger immediate validation feedback
-        const reqMedium = mediumForCable(selectedCableType);
-        if (!nodeSupportsMedium(node, reqMedium)) {
-          onConnectNodes(node.id, node.id, selectedCableType);
-          return;
-        }
         setConnectingSourceNodeId(node.id);
       } else {
         if (connectingSourceNodeId !== node.id) {
@@ -499,17 +469,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
       case 'ont': return <Radio className="h-5 w-5 text-sky-600" />;
       case 'mikrotik': return <Cpu className="h-5 w-5 text-orange-600" />;
       case 'switch': return <Layers className="h-5 w-5 text-blue-600" />;
-      case 'switch_managed': return <Layers className="h-5 w-5 text-indigo-700" />;
       case 'router': return <Radio className="h-5 w-5 text-cyan-600" />;
-      case 'ap_ptp': return <Radio className="h-5 w-5 text-sky-700" />;
       case 'mesh': return <Radio className="h-5 w-5 text-emerald-600" />;
-      case 'access_point': return <Wifi className="h-5 w-5 text-sky-600" />;
-      case 'firewall': return <Shield className="h-5 w-5 text-red-600" />;
-      case 'nas': return <HardDrive className="h-5 w-5 text-slate-700" />;
       case 'pc': return <Monitor className="h-5 w-5 text-slate-700" />;
-      case 'laptop': return <Laptop className="h-5 w-5 text-slate-700" />;
-      case 'printer': return <Printer className="h-5 w-5 text-teal-700" />;
-      case 'voip_phone': return <Phone className="h-5 w-5 text-sky-700" />;
       case 'cctv': return <Camera className="h-5 w-5 text-purple-600" />;
       case 'smartphone': return <Smartphone className="h-5 w-5 text-cyan-600" />;
       case 'iot': return <Zap className="h-5 w-5 text-teal-600" />;
@@ -616,28 +578,19 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
             return (
               <g
                 key={cable.id}
-                className="cursor-pointer group"
-                style={{ pointerEvents: 'auto' }}
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                }}
-                onTouchStart={(e) => {
-                  e.stopPropagation();
-                  onSelectCable(cable.id);
-                }}
+                className="pointer-events-auto cursor-pointer group"
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectCable(cable.id);
                 }}
               >
-                {/* 1. Wide invisible hover stroke that captures clicks */}
+                {/* 1. Wide invisible hover stroke */}
                 <path
                   d={pathD}
                   fill="none"
-                  stroke="rgba(0,0,0,0.001)"
-                  strokeWidth="30"
-                  style={{ pointerEvents: 'stroke' }}
-                  className="hover:stroke-sky-400/30 transition-all cursor-pointer"
+                  stroke="transparent"
+                  strokeWidth="24"
+                  className="hover:stroke-sky-400/20 transition-all"
                 />
 
                 {/* 2. White Halo Contrast Backing */}
@@ -646,9 +599,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                   fill="none"
                   stroke={isSelected ? '#38bdf8' : '#ffffff'}
                   strokeWidth={isSelected ? 9 : 6.5}
-                  strokeOpacity={isSelected ? 0.85 : 0.95}
+                  strokeOpacity={isSelected ? 0.8 : 0.95}
                   strokeLinecap="round"
-                  style={{ pointerEvents: 'stroke' }}
                 />
 
                 {/* 3. Main Colored Cable Wire */}
@@ -669,7 +621,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                   }
                   filter="url(#cableShadow)"
                   className="transition-colors"
-                  style={{ pointerEvents: 'stroke' }}
                 />
 
                 {/* 4. Port Terminal Connectors at both ends */}
@@ -681,7 +632,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                   stroke="#ffffff"
                   strokeWidth="2"
                   filter="url(#cableShadow)"
-                  style={{ pointerEvents: 'all' }}
                 />
                 <circle
                   cx={x2}
@@ -691,24 +641,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                   stroke="#ffffff"
                   strokeWidth="2"
                   filter="url(#cableShadow)"
-                  style={{ pointerEvents: 'all' }}
                 />
 
                 {/* 5. Cable Midpoint Badge */}
-                <g
-                  transform={`translate(${(x1 + x2) / 2}, ${(y1 + y2) / 2})`}
-                  style={{ pointerEvents: 'all' }}
-                  className="cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectCable(cable.id);
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onTouchStart={(e) => {
-                    e.stopPropagation();
-                    onSelectCable(cable.id);
-                  }}
-                >
+                <g transform={`translate(${(x1 + x2) / 2}, ${(y1 + y2) / 2})`}>
                   <rect
                     x="-38"
                     y="-13"
@@ -720,7 +656,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                     strokeWidth={isSelected ? 2.5 : 1.5}
                     filter="url(#cableShadow)"
                     className="group-hover:scale-110 transition-transform"
-                    style={{ pointerEvents: 'all' }}
                   />
                   <text
                     x="0"
@@ -730,7 +665,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                     fontWeight="700"
                     fill="#0f172a"
                     className="font-mono select-none"
-                    style={{ pointerEvents: 'none' }}
                   >
                     {isBroken ? 'PUTUS' : cable.type === 'lan' ? `${(cable.lengthKm * 1000).toFixed(0)}m` : `${cable.lengthKm.toFixed(1)}km`}
                   </text>
@@ -807,18 +741,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
           const isPowerOff = !node.poweredOn;
 
           const netAccess = internetAccess.get(node.id);
-          const isClientDevice = ['pc', 'laptop', 'printer', 'voip_phone', 'cctv', 'smartphone', 'iot', 'server'].includes(node.type);
+          const isClientDevice = ['pc', 'cctv', 'smartphone', 'iot', 'server'].includes(node.type);
           const hasInternetIssue = isClientDevice && !netAccess.hasInternet && node.poweredOn;
           const isOntBridge = node.type === 'ont' && node.ontConfig?.wanMode === 'bridge';
 
           const hasCritical = Boolean(criticalIssue) || isOpticalLos || hasInternetIssue;
-          const hasWarning = Boolean(warningIssue) || optResult?.status === 'acceptable' || (isOntBridge && !netAccess.hasInternet);
-
-          const cableReqMedium = mediumForCable(selectedCableType);
-          const isMediumCompatible = nodeSupportsMedium(node, cableReqMedium);
-          const mediumPorts = node.ports.filter((p) => p.medium === cableReqMedium);
-          const freeMediumPorts = mediumPorts.filter((p) => !p.connectedCableId);
-          const isPortFull = isMediumCompatible && mediumPorts.length > 0 && freeMediumPorts.length === 0;
+          const hasWarning = Boolean(warningIssue) || optResult?.status === 'acceptable' || isOntBridge;
 
           return (
             <div
@@ -830,13 +758,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                 left: `${node.x}px`,
                 top: `${node.y}px`,
               }}
-              title={
-                activeTool === 'cable' && !isMediumCompatible
-                  ? `${node.name}: Perangkat ini tidak memiliki port fisik untuk ${CABLE_METADATA[selectedCableType]?.name || selectedCableType}`
-                  : activeTool === 'cable' && isPortFull
-                  ? `${node.name}: Semua port ${CABLE_METADATA[selectedCableType]?.name || selectedCableType} sudah terisi penuh (${mediumPorts.length}/${mediumPorts.length})`
-                  : undefined
-              }
               className={`absolute pointer-events-auto w-[132px] rounded-xl bg-white border p-2.5 transition-shadow select-none shadow-xs ${
                 activeTool === 'move' ? 'cursor-move hover:ring-2 hover:ring-indigo-400' : 'cursor-pointer'
               } ${
@@ -844,12 +765,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                   ? 'border-sky-500 ring-4 ring-sky-300 animate-pulse'
                   : isPingSource
                   ? 'border-purple-500 ring-4 ring-purple-300 animate-pulse'
-                  : activeTool === 'cable' && !isMediumCompatible
-                  ? 'opacity-60 border-slate-200 bg-slate-50/90'
-                  : activeTool === 'cable' && isPortFull
-                  ? 'border-amber-400 bg-amber-50/40 ring-1 ring-amber-300'
-                  : activeTool === 'cable' && isMediumCompatible && !connectingSourceNodeId
-                  ? 'border-sky-300 ring-1 ring-sky-200 hover:ring-2 hover:ring-sky-400'
                   : isSelected
                   ? 'border-sky-600 ring-2 ring-sky-400 shadow-md'
                   : hasCritical
@@ -864,20 +779,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                 <div className="flex items-center justify-center gap-1 rounded bg-indigo-50 py-0.5 mb-1.5 text-[9px] font-bold text-indigo-700">
                   <Move className="h-3 w-3" />
                   <span>TARIK GESER</span>
-                </div>
-              )}
-
-              {/* Incompatible Cable Indicator if in 'cable' mode */}
-              {activeTool === 'cable' && !isMediumCompatible && (
-                <div className="flex items-center justify-center gap-1 rounded bg-slate-100 py-0.5 mb-1 text-[8.5px] font-semibold text-slate-500">
-                  <span>Port Tidak Cocok</span>
-                </div>
-              )}
-
-              {/* Port Full Indicator if in 'cable' mode */}
-              {activeTool === 'cable' && isPortFull && (
-                <div className="flex items-center justify-center gap-1 rounded bg-amber-100 py-0.5 mb-1 text-[8.5px] font-bold text-amber-800 border border-amber-300">
-                  <span>Port Penuh ({mediumPorts.length}/{mediumPorts.length})</span>
                 </div>
               )}
 
@@ -964,21 +865,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                   </div>
                 ) : isOntBridge ? (
                   <div
-                    className={`mt-1 flex items-center gap-1 rounded px-1.5 py-0.5 text-[8.5px] font-bold border truncate ${
-                      netAccess.hasInternet
-                        ? 'bg-sky-50 text-sky-800 border-sky-300'
-                        : 'bg-amber-50 text-amber-800 border-amber-300'
-                    }`}
-                    title={
-                      netAccess.hasInternet
-                        ? `ONT dalam Mode Bridge (Layer 2) terhubung ke ${netAccess.gatewayNode?.name || 'Router'}`
-                        : 'ONT dalam Mode Bridge (Layer 2) - Klien butuh router dialer PPPoE'
-                    }
+                    className="mt-1 flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-[8.5px] font-bold text-amber-800 border border-amber-300 truncate"
+                    title="ONT dalam Mode Bridge (Layer 2) - Klien butuh router dialer PPPoE"
                   >
-                    <AlertCircle className={`h-2.5 w-2.5 shrink-0 ${netAccess.hasInternet ? 'text-sky-600' : 'text-amber-600'}`} />
-                    <span className="truncate">
-                      {netAccess.hasInternet ? `Bridge -> ${netAccess.gatewayNode?.name ? netAccess.gatewayNode.name.split(' ')[0] : 'Router'}` : '⚠️ Bridge (No Route)'}
-                    </span>
+                    <AlertCircle className="h-2.5 w-2.5 shrink-0 text-amber-600" />
+                    <span className="truncate">⚠️ Bridge (No Route)</span>
                   </div>
                 ) : warningIssue ? (
                   <div

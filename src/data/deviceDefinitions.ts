@@ -223,50 +223,6 @@ export const DEVICE_METADATA: Record<NodeType, DeviceMetadata> = {
     ],
     color: '#2563eb', // Blue
   },
-  switch_managed: {
-    type: 'switch_managed',
-    name: 'Switch Hub Manageable (L2/L3)',
-    category: 'routing',
-    shortDesc: 'Switch Enterprise 24 GE + 4 SFP+ (VLAN 802.1Q, LACP, STP, PoE)',
-    fullDescription: 'Switch manageable kelas enterprise dengan kontrol per-port: pembagian VLAN 802.1Q (Trunk/Access), isolasi broadcast domain, STP/RSTP anti loop, Port Mirroring, dan uplink fiber SFP+ 10Gbps.',
-    technicianRole: 'Distribusi jaringan inti di gedung, hotel, atau ISP dengan manajemen bandwidth, isolasi pelanggan, dan keamanan port.',
-    technicianTips: [
-      'Gunakan port Trunk untuk kabel penghubung ke router MikroTik atau antar switch, dan port Access untuk perangkat pengguna/CCTV.',
-      'Aktifkan RSTP (Rapid Spanning Tree Protocol) untuk mencegah jaringan lumpuh (broadcast storm) saat ada teknisi salah colok kabel loop.',
-      'SFP+ Uplink port (Port 25-28) dapat menggunakan modul SFP 1G atau 10G untuk interkoneksi backbone optik jarak jauh.'
-    ],
-    defaultPorts: [
-      { name: 'Port 1 (GE)', medium: 'ethernet' },
-      { name: 'Port 2 (GE)', medium: 'ethernet' },
-      { name: 'Port 3 (GE)', medium: 'ethernet' },
-      { name: 'Port 4 (GE)', medium: 'ethernet' },
-      { name: 'Port 5 (GE)', medium: 'ethernet' },
-      { name: 'Port 6 (GE)', medium: 'ethernet' },
-      { name: 'Port 7 (GE)', medium: 'ethernet' },
-      { name: 'Port 8 (GE)', medium: 'ethernet' },
-      { name: 'Port 9 (GE)', medium: 'ethernet' },
-      { name: 'Port 10 (GE)', medium: 'ethernet' },
-      { name: 'Port 11 (GE)', medium: 'ethernet' },
-      { name: 'Port 12 (GE)', medium: 'ethernet' },
-      { name: 'Port 13 (GE)', medium: 'ethernet' },
-      { name: 'Port 14 (GE)', medium: 'ethernet' },
-      { name: 'Port 15 (GE)', medium: 'ethernet' },
-      { name: 'Port 16 (GE)', medium: 'ethernet' },
-      { name: 'Port 17 (GE)', medium: 'ethernet' },
-      { name: 'Port 18 (GE)', medium: 'ethernet' },
-      { name: 'Port 19 (GE)', medium: 'ethernet' },
-      { name: 'Port 20 (GE)', medium: 'ethernet' },
-      { name: 'Port 21 (GE)', medium: 'ethernet' },
-      { name: 'Port 22 (GE)', medium: 'ethernet' },
-      { name: 'Port 23 (GE)', medium: 'ethernet' },
-      { name: 'Port 24 (GE)', medium: 'ethernet' },
-      { name: 'SFP+ 25 (10G)', medium: 'fiber' },
-      { name: 'SFP+ 26 (10G)', medium: 'fiber' },
-      { name: 'SFP+ 27 (10G)', medium: 'fiber' },
-      { name: 'SFP+ 28 (10G)', medium: 'fiber' },
-    ],
-    color: '#1d4ed8', // Dark Blue
-  },
   router: {
     type: 'router',
     name: 'Wi-Fi Wireless Router',
@@ -288,24 +244,6 @@ export const DEVICE_METADATA: Record<NodeType, DeviceMetadata> = {
       { name: 'Wi-Fi 2.4G/5G', medium: 'wireless' },
     ],
     color: '#0891b2', // Cyan
-  },
-  ap_ptp: {
-    type: 'ap_ptp',
-    name: 'Access Point PTP (Wireless Outdoor Bridge)',
-    category: 'routing',
-    shortDesc: 'Koneksi Nirkabel Point-to-Point Jarak Jauh (airMAX, 5GHz/60GHz)',
-    fullDescription: 'Perangkat radio outdoor nirkabel berkekuatan tinggi (dish/grid antenna) untuk menghubungkan dua lokasi tanpa kabel (Point-to-Point / PtMP) hingga jarak 20+ kilometer dengan throughput gigabit.',
-    technicianRole: 'Menghubungkan tower pemancar BTS ke gedung pelanggan, menghubungkan dua kantor cabang antar pulau/bukit, atau transmisi CCTV pedalaman.',
-    technicianTips: [
-      'Pointing antena wajib dilakukan berdua: satu teknisi di tower A dan satu di tower B sambil memantau indikator LED sinyal RSSI (-50 dBm s/d -60 dBm ideal).',
-      'Pastikan zona Fresnel (Fresnel Zone) 60% bebas hambatan dari pohon, bukit, atau bangunan tinggi agar kecepatan throughput tidak anjlok.',
-      'Gunakan kabel outdoor STP berlapis pelindung grounding (shielded) dan pasang Ethernet Surge Protector untuk proteksi petir.'
-    ],
-    defaultPorts: [
-      { name: 'Gigabit PoE LAN (RJ-45)', medium: 'ethernet' },
-      { name: 'Wireless PtP Radio', medium: 'wireless' },
-    ],
-    color: '#0284c7', // Sky dark
   },
   mesh: {
     type: 'mesh',
@@ -414,113 +352,5 @@ export const DEVICE_METADATA: Record<NodeType, DeviceMetadata> = {
       { name: 'Fiber SFP+', medium: 'fiber' },
     ],
     color: '#334155', // Slate dark
-  },
-  access_point: {
-    type: 'access_point',
-    name: 'Access Point Enterprise (Ceiling/Wall AP)',
-    category: 'routing',
-    shortDesc: 'Wi-Fi 6 Enterprise AP (PoE, Multi-SSID, VLAN Tagging)',
-    fullDescription: 'Access Point kelas bisnis untuk kantor, hotel, dan kafe dengan dukungan Wi-Fi 6 Dual Band simultan, roaming 802.11k/v/r, PoE gigabit, dan multi-SSID terikat VLAN.',
-    technicianRole: 'Menyediakan jangkauan Wi-Fi berkecepatan tinggi ke ratusan klien tanpa interferensi, mendukung captive portal tamu dan pemisahan VLAN kantor.',
-    technicianTips: [
-      'Gunakan injektor PoE 802.3at (PoE+) atau sambungkan ke Switch PoE port Gigabit.',
-      'Gunakan kanal 20MHz/40MHz pada 2.4GHz dan 80MHz pada 5GHz untuk throughput maksimal.',
-      'Pasang di plafon terbuka di tengah ruangan (bukan di dalam lemari atau di balik dinding semen tebal).'
-    ],
-    defaultPorts: [
-      { name: 'Gigabit PoE LAN', medium: 'ethernet' },
-      { name: 'Wi-Fi 2.4G & 5G Radio', medium: 'wireless' },
-    ],
-    color: '#0284c7', // Sky
-  },
-  firewall: {
-    type: 'firewall',
-    name: 'Hardware Firewall / UTM Gateway',
-    category: 'infrastructure',
-    shortDesc: 'Keamanan Jaringan Enterprise (IPS/IDS, VPN, Multi-WAN Failover)',
-    fullDescription: 'Perangkat keamanan jaringan terdedikasi (Fortinet FortiGate, pfSense) yang memfilter paket data berbahaya (Deep Packet Inspection), mengelola VPN antar cabang, dan proteksi dari serangan DDoS.',
-    technicianRole: 'Garis pertahanan pertama antara WAN Internet dan jaringan LAN internal kantor/data center.',
-    technicianTips: [
-      'Atur policy default: DROP all incoming traffic kecuali yang diizinkan eksplisit.',
-      'Aktifkan dual-WAN failover agar koneksi internet otomatis pindah ke backup saat ISP utama down.',
-      'Gunakan sertifikat SSL untuk deep inspection HTTPS traffic.'
-    ],
-    defaultPorts: [
-      { name: 'WAN 1 (Internet)', medium: 'ethernet' },
-      { name: 'WAN 2 (Backup)', medium: 'ethernet' },
-      { name: 'LAN 1 (Internal)', medium: 'ethernet' },
-      { name: 'LAN 2 (DMZ)', medium: 'ethernet' },
-      { name: 'DMZ SFP+ (10G)', medium: 'fiber' },
-    ],
-    color: '#dc2626', // Red
-  },
-  nas: {
-    type: 'nas',
-    name: 'NAS Storage / NVR CCTV Server',
-    category: 'infrastructure',
-    shortDesc: 'Pusat Penyimpanan Jaringan & Rekaman CCTV (RAID/NFS/SMB)',
-    fullDescription: 'Penyimpanan terpusat jaringan berkapasitas besar (Synology, QNAP) untuk backup data karyawan, file sharing lokal, dan rekaman continuous streaming kamera CCTV IP (NVR).',
-    technicianRole: 'Tempat penyimpanan aman file perusahaan dan rekaman footage keamanan real-time 24/7.',
-    technicianTips: [
-      'Konfigurasikan Link Aggregation (LACP Bonding) di switch managed untuk menggandakan bandwidth transmisi (2x 1Gbps).',
-      'Gunakan susunan RAID 5 atau RAID 6 agar data tidak hilang bila ada 1-2 harddisk yang rusak/bad sector.',
-      'Gunakan IP Static dan pisahkan traffic penyimpanan ke VLAN khusus.'
-    ],
-    defaultPorts: [
-      { name: 'LAN 1 (GE LACP)', medium: 'ethernet' },
-      { name: 'LAN 2 (GE LACP)', medium: 'ethernet' },
-    ],
-    color: '#475569', // Slate
-  },
-  laptop: {
-    type: 'laptop',
-    name: 'Laptop Portable (Wi-Fi & LAN)',
-    category: 'client_iot',
-    shortDesc: 'Komputer Jinjing Klien dengan Dual Interface',
-    fullDescription: 'Perangkat kerja bergerak yang fleksibel terhubung melalui kabel LAN Gigabit saat di meja kerja atau melalui Wi-Fi saat berpindah ruangan.',
-    technicianRole: 'Alat uji mobilitas roaming Wi-Fi teknisi dan workstation pengguna dinamis.',
-    technicianTips: [
-      'Bila laptop dicolok kabel LAN, adaptor Wi-Fi otomatis prioritas nomor 2 untuk menghindari bridge loop.',
-      'Cek driver kartu jaringan Wi-Fi untuk memastikan kompatibilitas WPA3 dan Wi-Fi 6 AX.'
-    ],
-    defaultPorts: [
-      { name: 'LAN RJ-45', medium: 'ethernet' },
-      { name: 'Wi-Fi 6 Adapter', medium: 'wireless' },
-    ],
-    color: '#475569', // Slate
-  },
-  printer: {
-    type: 'printer',
-    name: 'Network Printer (LAN / Wi-Fi)',
-    category: 'client_iot',
-    shortDesc: 'Printer Jaringan Kantor / Barcode Scanner',
-    fullDescription: 'Printer multifungsi jaringan (Epson, HP, Canon) yang melayani cetak dokumen dari seluruh komputer dalam subnet LAN atau Wi-Fi tanpa perlu share komputer host.',
-    technicianRole: 'Perangkat bersama di kantor yang melayani cetak dokumen via protokol TCP RAW port 9100 atau IPP port 631.',
-    technicianTips: [
-      'Wajib menggunakan IP Static atau DHCP Reservation berdasarkan MAC address agar IP tidak berubah-ubah saat lease habis.',
-      'Pastikan printer berada di subnet yang sama dengan komputer atau routing antar-VLAN membuka port 9100.'
-    ],
-    defaultPorts: [
-      { name: 'Ethernet RJ-45', medium: 'ethernet' },
-      { name: 'Wi-Fi Interface', medium: 'wireless' },
-    ],
-    color: '#0f766e', // Teal dark
-  },
-  voip_phone: {
-    type: 'voip_phone',
-    name: 'IP Phone / VoIP SIP Terminal',
-    category: 'client_iot',
-    shortDesc: 'Telepon Suara Jaringan IP (PoE, Voice VLAN, SIP)',
-    fullDescription: 'Pesawat telepon digital kantor (Yealink, Grandstream, Cisco) yang terhubung ke IP PBX server melalui protokol SIP untuk komunikasi suara berkualitas HD.',
-    technicianRole: 'Komunikasi suara antar divisi dan sambungan telepon kantor via jaringan internet/intranet.',
-    technicianTips: [
-      'Aktifkan Voice VLAN (LLDP-MED) agar paket suara memiliki prioritas QoS (DSCP EF / CoS 5) dan bebas jitter.',
-      'Port PC passthrough dapat dicolokkan ke komputer karyawan sehingga cukup 1 tarikan kabel LAN dari switch ke meja.'
-    ],
-    defaultPorts: [
-      { name: 'LAN (PoE In)', medium: 'ethernet' },
-      { name: 'PC Out (Passthrough)', medium: 'ethernet' },
-    ],
-    color: '#0369a1', // Sky dark
   },
 };

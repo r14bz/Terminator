@@ -16,8 +16,6 @@
 import type { CableConnection, DiagnosticIssue, NetworkNode } from '../types/network';
 import { addressOf, findUpstreamGateway, isValidIpv4 } from './ipUtils';
 import { allocateStaticHost, lanDefaultsFor, usedAddresses, firstFreeHost, dhcpPoolOf, FALLBACK_LAN } from './ipAlloc';
-import { nodeSupportsMedium } from './cableCompatibility';
-import { reconcilePorts } from './portReconcile';
 
 export interface AutoFixResult {
   nodes: NetworkNode[];
@@ -330,44 +328,6 @@ const handlers: Array<{ prefix: string; run: FixHandler }> = [
       if (!client) return null;
       const upstream = findUpstreamGateway(client, nodes, cables);
       return fixOntBridge(upstream?.id, nodes, cables);
-    },
-  },
-  // Check 13: Incompatible physical medium / connector.
-  {
-    prefix: 'physical-mismatch-',
-    run: (issue, nodes, cables) => {
-      if (!issue.targetCableId) return null;
-      const targetCable = cables.find((c) => c.id === issue.targetCableId);
-      if (!targetCable) return null;
-      const fromNode = nodes.find((n) => n.id === targetCable.fromNodeId);
-      const toNode = nodes.find((n) => n.id === targetCable.toNodeId);
-      if (!fromNode || !toNode) return null;
-
-      // Both support Ethernet: convert to standard LAN Cat6
-      if (nodeSupportsMedium(fromNode, 'ethernet') && nodeSupportsMedium(toNode, 'ethernet')) {
-        const updatedCables = cables.map((c) =>
-          c.id === targetCable.id ? { ...c, type: 'lan' as const, attenuationDb: 0.05 } : c
-        );
-        return {
-          nodes: reconcilePorts(nodes, updatedCables),
-          cables: updatedCables,
-          summary: `Kabel antara ${fromNode.name} dan ${toNode.name} diganti menjadi Kabel LAN UTP (Cat6 RJ-45).`,
-        };
-      }
-
-      // Both support Wireless: convert to Wi-Fi connection
-      if (nodeSupportsMedium(fromNode, 'wireless') && nodeSupportsMedium(toNode, 'wireless')) {
-        const updatedCables = cables.map((c) =>
-          c.id === targetCable.id ? { ...c, type: 'wireless' as const, attenuationDb: 0 } : c
-        );
-        return {
-          nodes: reconcilePorts(nodes, updatedCables),
-          cables: updatedCables,
-          summary: `Koneksi antara ${fromNode.name} dan ${toNode.name} dialihkan ke Koneksi Nirkabel / Wi-Fi.`,
-        };
-      }
-
-      return null;
     },
   },
 ];

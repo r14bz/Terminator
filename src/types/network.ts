@@ -23,17 +23,9 @@ export type NodeType =
   | 'ont'
   | 'mikrotik'
   | 'switch'
-  | 'switch_managed'
   | 'router'
-  | 'ap_ptp'
   | 'mesh'
-  | 'access_point'
-  | 'firewall'
-  | 'nas'
   | 'pc'
-  | 'laptop'
-  | 'printer'
-  | 'voip_phone'
   | 'cctv'
   | 'smartphone'
   | 'iot'
@@ -119,93 +111,6 @@ export interface NetworkNode {
     isManaged: boolean;
     stpEnabled: boolean;
     vlanTrunkPort?: string;
-  };
-
-  // Manageable Switch Hardware Config
-  managedSwitchConfig?: {
-    managementIp: string;
-    managementSubnet: string;
-    managementGateway: string;
-    stpMode: 'rstp' | 'stp' | 'mstp' | 'disabled';
-    igmpSnooping: boolean;
-    lacpTrunkEnabled: boolean;
-    portMirroring: boolean;
-    mirrorSourcePort?: string;
-    mirrorTargetPort?: string;
-    poeBudgetWatts: number;
-    poeUsageWatts: number;
-    loopProtect: boolean;
-  };
-
-  // Point to Point / Wireless Bridge Config
-  ptpConfig?: {
-    mode: 'ap_ptp' | 'station_ptp' | 'ap_ptmp';
-    frequencyMhz: number;       // e.g. 5180 - 5825 MHz, or 60000 MHz
-    channelWidthMhz: 20 | 40 | 80 | 160;
-    distanceKm: number;
-    txPowerDbm: number;         // e.g. 23 dBm
-    antennaGainDbi: number;     // e.g. 23 dBi
-    ssid: string;
-    securityKey?: string;
-    signalRssiDbm?: number;     // e.g. -58 dBm
-    linkQualityPercent?: number;// e.g. 99%
-  };
-
-  // Mesh Wi-Fi Config
-  meshConfig?: {
-    role: 'root' | 'satellite';
-    backhaulType: 'ethernet' | 'wireless_5ghz';
-    fastRoaming: boolean;       // 802.11k/v/r
-    ssid: string;
-    wifiKey?: string;
-    bandSteering: boolean;      // 2.4G & 5G smart connect
-    rssiThresholdDbm: number;   // Roaming handover threshold (e.g. -70 dBm)
-    channel24G: number;
-    channel5G: number;
-    hopCount?: number;
-  };
-
-  // Standalone Enterprise Access Point Config
-  accessPointConfig?: {
-    ssid24: string;
-    ssid5: string;
-    wifiKey?: string;
-    channel24: number;
-    channel5: number;
-    poePowered: boolean;
-    vlanTagged: boolean;
-    vlanId?: number;
-    txPowerDbm: number;
-    guestPortalEnabled: boolean;
-  };
-
-  // Hardware Firewall / Security Gateway Config
-  firewallConfig?: {
-    natEnabled: boolean;
-    ipsEnabled: boolean;
-    vpnServer: boolean;
-    wanFailover: boolean;
-    blockedPorts: number[];
-    bandwidthShaping: boolean;
-  };
-
-  // Network Attached Storage / NVR Server Config
-  nasConfig?: {
-    raidLevel: 'RAID 0' | 'RAID 1' | 'RAID 5' | 'RAID 6' | 'SHR';
-    capacityTb: number;
-    usedStorageTb: number;
-    nfsSmbEnabled: boolean;
-    nvrRecording: boolean;
-    lacpBonding: boolean;
-  };
-
-  // IP Phone / VoIP SIP Terminal Config
-  voipConfig?: {
-    sipExtension: string;
-    sipServerIp: string;
-    codec: 'G.711u' | 'G.711a' | 'G.729' | 'Opus';
-    voiceVlanId: number;
-    status: 'registered' | 'unregistered' | 'calling';
   };
 
   // IP & Networking Config

@@ -15,12 +15,6 @@ import {
   ChevronDown,
   ChevronUp,
   Plus,
-  Wifi,
-  Shield,
-  HardDrive,
-  Laptop,
-  Printer,
-  Phone,
 } from 'lucide-react';
 import type { NodeType, DeviceCategory } from '../types/network';
 import { DEVICE_METADATA } from '../data/deviceDefinitions';
@@ -63,28 +57,12 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice }) => 
         return <Cpu className="h-4 w-4 text-orange-600" />;
       case 'switch':
         return <Layers className="h-4 w-4 text-blue-600" />;
-      case 'switch_managed':
-        return <Layers className="h-4 w-4 text-indigo-700" />;
       case 'router':
         return <Radio className="h-4 w-4 text-cyan-600" />;
-      case 'ap_ptp':
-        return <Radio className="h-4 w-4 text-sky-700" />;
       case 'mesh':
         return <Radio className="h-4 w-4 text-emerald-600" />;
-      case 'access_point':
-        return <Wifi className="h-4 w-4 text-sky-600" />;
-      case 'firewall':
-        return <Shield className="h-4 w-4 text-red-600" />;
-      case 'nas':
-        return <HardDrive className="h-4 w-4 text-slate-700" />;
       case 'pc':
         return <Monitor className="h-4 w-4 text-slate-700" />;
-      case 'laptop':
-        return <Laptop className="h-4 w-4 text-slate-700" />;
-      case 'printer':
-        return <Printer className="h-4 w-4 text-teal-700" />;
-      case 'voip_phone':
-        return <Phone className="h-4 w-4 text-sky-700" />;
       case 'cctv':
         return <Camera className="h-4 w-4 text-purple-600" />;
       case 'smartphone':
