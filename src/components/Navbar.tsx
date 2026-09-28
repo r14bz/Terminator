@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Play,
   Pause,
@@ -12,8 +12,12 @@ import {
   Redo2,
   Download,
   Upload,
+  Sparkles,
+  Bot,
+  FolderArchive,
 } from 'lucide-react';
 import type { DiagnosticIssue, ActiveTool } from '../types/network';
+import { checkAiStatus, type AiStatusInfo } from '../utils/aiService';
 
 interface NavbarProps {
   isRunning: boolean;
@@ -23,6 +27,7 @@ interface NavbarProps {
   onOpenTroubleshooting: () => void;
   onOpenGlossary: () => void;
   onOpenTemplates: () => void;
+  onOpenAiChat: () => void;
   onSaveImage: () => void;
   activeTool: ActiveTool;
   setActiveTool: (tool: ActiveTool) => void;
@@ -42,6 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenTroubleshooting,
   onOpenGlossary,
   onOpenTemplates,
+  onOpenAiChat,
   onSaveImage,
   canUndo,
   canRedo,
@@ -51,6 +57,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   onImportJson,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [aiStatus, setAiStatus] = useState<AiStatusInfo | null>(null);
+
+  useEffect(() => {
+    checkAiStatus().then(setAiStatus).catch(() => {});
+  }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -138,6 +149,42 @@ export const Navbar: React.FC<NavbarProps> = ({
               {criticalCount > 0 ? `(${criticalCount})` : warningCount > 0 ? `(${warningCount})` : 'OK'}
             </span>
           </button>
+
+          {/* AI Network Assistant Button */}
+          <button
+            onClick={onOpenAiChat}
+            className={`flex items-center gap-1 sm:gap-1.5 rounded-lg border px-2 py-1.5 sm:px-2.5 sm:py-1.5 text-xs font-bold transition-all shadow-2xs whitespace-nowrap ${
+              aiStatus?.provider === 'openrouter'
+                ? 'border-purple-300 bg-linear-to-r from-purple-50 to-indigo-50 text-purple-900 hover:from-purple-100 hover:to-indigo-100 hover:border-purple-400'
+                : 'border-sky-300 bg-linear-to-r from-sky-50 to-indigo-50 text-sky-800 hover:from-sky-100 hover:to-indigo-100 hover:border-sky-400'
+            }`}
+            title={`Buka Terminator AI (${aiStatus?.providerName || 'AI Asisten'} - ${aiStatus?.model || ''})`}
+          >
+            <Sparkles
+              className={`h-3.5 w-3.5 shrink-0 ${
+                aiStatus?.provider === 'openrouter' ? 'text-purple-600' : 'text-sky-600'
+              }`}
+            />
+            <span className="hidden sm:inline">AI Asisten</span>
+            <span className="sm:hidden">AI</span>
+            {aiStatus && (
+              <span
+                className={`rounded-full px-1.5 py-0.2 text-[9px] font-bold tracking-wide ${
+                  aiStatus.provider === 'openrouter'
+                    ? 'bg-purple-600 text-white'
+                    : aiStatus.provider === 'opencode'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-sky-600 text-white'
+                }`}
+              >
+                {aiStatus.provider === 'openrouter'
+                  ? 'OpenRouter'
+                  : aiStatus.provider === 'opencode'
+                  ? 'OpenCode'
+                  : 'Gemini'}
+              </span>
+            )}
+          </button>
         </nav>
 
         {/* Zone 3: Desktop Primary Action Cluster (Hidden on mobile, moved to responsive subrow) */}
@@ -200,6 +247,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Simpan Gambar</span>
           </button>
 
+          {/* DOWNLOAD PROJECT ZIP FOR GITHUB */}
+          <a
+            href="/api/download-zip"
+            download="terminator-network-simulator.zip"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shadow-2xs whitespace-nowrap"
+            title="Download full project source code (.ZIP) siap di-push ke GitHub"
+          >
+            <FolderArchive className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Unduh ZIP</span>
+          </a>
+
           {/* RUN / SIMULATION TOGGLE */}
           <button
             onClick={onToggleRun}
@@ -260,6 +318,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Download className="h-3.5 w-3.5" />
           </button>
+          <a
+            href="/api/download-zip"
+            download="terminator-network-simulator.zip"
+            className="flex items-center justify-center rounded-lg border border-slate-700 bg-slate-900 p-1.5 text-white active:bg-slate-800 transition-colors shadow-2xs"
+            title="Download ZIP project (.ZIP)"
+          >
+            <FolderArchive className="h-3.5 w-3.5 text-emerald-400" />
+          </a>
         </div>
 
         {/* Row 2: Reset, Simpan Gambar, RUN */}

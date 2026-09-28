@@ -102,6 +102,55 @@ export function isSameSubnet(ip1: string, ip2: string, mask: string = '255.255.2
  * client) is correctly transparent to this walk regardless of which medium
  * connects it to its neighbour.
  */
+/**
+ * Searches for a powered-on router (MikroTik or Router) connected to an ONT in bridge mode,
+ * traversing through Layer 1 / Layer 2 devices (HTB media converters, Ethernet switches).
+ */
+export function findRouterConnectedToBridge(
+  ontNode: NetworkNode,
+  allNodes: readonly NetworkNode[],
+  allCables: readonly CableConnection[]
+): NetworkNode | null {
+  const visited = new Set<string>();
+  const queue: string[] = [ontNode.id];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
+
+    const currentNode = allNodes.find((n) => n.id === currentId);
+    if (!currentNode) continue;
+
+    if (currentId !== ontNode.id) {
+      if (['mikrotik', 'router'].includes(currentNode.type)) {
+        if (currentNode.poweredOn) {
+          return currentNode;
+        }
+      }
+      // Only traverse through Layer 1 / Layer 2 transparent bridge devices
+      if (!['switch', 'switch_managed', 'ap_ptp', 'htb'].includes(currentNode.type)) {
+        continue;
+      }
+    }
+
+    const connectedCables = allCables.filter(
+      (c) =>
+        c.status !== 'broken' &&
+        (c.fromNodeId === currentId || c.toNodeId === currentId)
+    );
+
+    for (const cable of connectedCables) {
+      const neighborId = cable.fromNodeId === currentId ? cable.toNodeId : cable.fromNodeId;
+      if (!visited.has(neighborId)) {
+        queue.push(neighborId);
+      }
+    }
+  }
+
+  return null;
+}
+
 export function findUpstreamGateway(
   startNode: NetworkNode,
   allNodes: readonly NetworkNode[],
@@ -123,6 +172,14 @@ export function findUpstreamGateway(
       currentId !== startNode.id &&
       ['ont', 'mikrotik', 'router'].includes(currentNode.type)
     ) {
+      // If we reached an ONT in bridge mode, and a powered-on router exists behind it,
+      // the true Layer 3 gateway for this host is that router!
+      if (currentNode.type === 'ont' && currentNode.ontConfig?.wanMode === 'bridge') {
+        const secondary = findRouterConnectedToBridge(currentNode, allNodes, allCables);
+        if (secondary && secondary.poweredOn) {
+          return secondary;
+        }
+      }
       return currentNode;
     }
 
@@ -170,9 +227,30 @@ export function checkInternetAccess(
   // If node is an ONT itself
   if (node.type === 'ont') {
     if (node.ontConfig?.wanMode === 'bridge') {
+      const connectedRouter = findRouterConnectedToBridge(node, allNodes, allCables);
+      const hasDirectFiberUplink = allCables.some(
+        (c) =>
+          c.status !== 'broken' &&
+          ['drop_core', 'distribusi', 'feeder'].includes(c.type) &&
+          (c.fromNodeId === node.id || c.toNodeId === node.id)
+      );
+
+      // If the ONT is deployed on the LAN side of a router (e.g. via HTB or LAN without direct ISP fiber),
+      // and connected to an active router that has internet:
+      if (!hasDirectFiberUplink && connectedRouter && connectedRouter.poweredOn) {
+        const routerAccess = checkInternetAccess(connectedRouter, allNodes, allCables);
+        if (routerAccess.hasInternet) {
+          return {
+            hasInternet: true,
+            gatewayNode: connectedRouter,
+          };
+        }
+      }
+
       return {
         hasInternet: false,
         reason: 'ONT berada dalam Mode Bridge (Layer 2). ONT tidak melakukan dial PPPoE atau routing internet.',
+        gatewayNode: connectedRouter || null,
       };
     }
     const hasOpticalUplink = allCables.some(
@@ -205,25 +283,26 @@ export function checkInternetAccess(
     };
   }
 
+  const activeGateway =
+    upstreamGateway.type === 'ont' && upstreamGateway.ontConfig?.wanMode === 'bridge'
+      ? findRouterConnectedToBridge(upstreamGateway, allNodes, allCables) || upstreamGateway
+      : upstreamGateway;
+
   const routerLanIp =
-    upstreamGateway.type === 'ont'
-      ? upstreamGateway.ontConfig?.lanIp || upstreamGateway.ipConfig?.ip || '192.168.1.1'
-      : upstreamGateway.ipConfig?.ip || '192.168.88.1';
+    activeGateway.type === 'ont'
+      ? activeGateway.ontConfig?.lanIp || activeGateway.ipConfig?.ip || '192.168.1.1'
+      : activeGateway.ipConfig?.ip || '192.168.88.1';
   const routerSubnet =
-    upstreamGateway.type === 'ont'
-      ? upstreamGateway.ontConfig?.lanSubnet || upstreamGateway.ipConfig?.subnet || '255.255.255.0'
-      : upstreamGateway.ipConfig?.subnet || '255.255.255.0';
+    activeGateway.type === 'ont'
+      ? activeGateway.ontConfig?.lanSubnet || activeGateway.ipConfig?.subnet || '255.255.255.0'
+      : activeGateway.ipConfig?.subnet || '255.255.255.0';
 
   // 1. Check if upstream is ONT in Bridge Mode!
   if (upstreamGateway.type === 'ont') {
     if (upstreamGateway.ontConfig?.wanMode === 'bridge') {
       // Check if there is a MikroTik router connected to this ONT that acts as PPPoE dialer
-      const hasSecondaryRouter = allCables.some((c) => {
-        if (c.status === 'broken' || c.type !== 'lan') return false;
-        const otherId = c.fromNodeId === upstreamGateway.id ? c.toNodeId : c.fromNodeId;
-        const otherNode = allNodes.find((n) => n.id === otherId);
-        return otherNode?.type === 'mikrotik' && otherNode.poweredOn;
-      });
+      const secondaryRouter = findRouterConnectedToBridge(upstreamGateway, allNodes, allCables);
+      const hasSecondaryRouter = Boolean(secondaryRouter && secondaryRouter.poweredOn);
 
       if (!hasSecondaryRouter) {
         return {
@@ -250,19 +329,19 @@ export function checkInternetAccess(
   }
 
   // 3. If upstream is MikroTik
-  if (upstreamGateway.type === 'mikrotik') {
-    if (!upstreamGateway.mikrotikConfig?.firewallNat) {
+  if (activeGateway.type === 'mikrotik') {
+    if (!activeGateway.mikrotikConfig?.firewallNat) {
       return {
         hasInternet: false,
-        reason: `NAT Masquerade pada MikroTik (${upstreamGateway.name}) tidak aktif. Paket LAN tidak bisa keluar ke internet.`,
-        gatewayNode: upstreamGateway,
+        reason: `NAT Masquerade pada MikroTik (${activeGateway.name}) tidak aktif. Paket LAN tidak bisa keluar ke internet.`,
+        gatewayNode: activeGateway,
       };
     }
-    if (node.ipConfig?.mode === 'dhcp' && upstreamGateway.ipConfig?.isDhcpServerEnabled === false) {
+    if (node.ipConfig?.mode === 'dhcp' && activeGateway.ipConfig?.isDhcpServerEnabled === false) {
       return {
         hasInternet: false,
-        reason: `DHCP Server pada MikroTik (${upstreamGateway.name}) dimatikan.`,
-        gatewayNode: upstreamGateway,
+        reason: `DHCP Server pada MikroTik (${activeGateway.name}) dimatikan.`,
+        gatewayNode: activeGateway,
       };
     }
   }

@@ -1,9 +1,45 @@
 import React, { useState } from 'react';
-import { X, Power, Trash2, Terminal, Activity, CheckCircle2, AlertTriangle, Info, Server, Sliders, ShieldCheck, Globe, Wifi, Lock, Tag, Gauge, Video } from 'lucide-react';
-import type { NetworkNode, CableConnection } from '../types/network';
+import {
+  X,
+  Power,
+  Trash2,
+  Terminal,
+  Activity,
+  CheckCircle2,
+  AlertTriangle,
+  Info,
+  Server,
+  Sliders,
+  ShieldCheck,
+  Globe,
+  Wifi,
+  Lock,
+  Tag,
+  Gauge,
+  Video,
+  Radio,
+  Share2,
+  Layers,
+  Cpu,
+  Compass,
+  Plus,
+  Minus,
+  ArrowRightLeft,
+  Zap,
+  Cable,
+  Shield,
+  HardDrive,
+  Laptop,
+  Printer,
+  Phone,
+  Sparkles,
+  Bot,
+} from 'lucide-react';
+import type { NetworkNode, CableConnection, PortMedium } from '../types/network';
 import { DEVICE_METADATA } from '../data/deviceDefinitions';
 import { DEVICE_BRANDS } from '../data/deviceBrands';
 import type { OpticalCalculationResult } from '../utils/opticalCalculator';
+import { SPLITTER_LOSS_MAP } from '../utils/opticalCalculator';
 import { findUpstreamGateway, isSameSubnet, isValidIpv4, checkInternetAccess } from '../utils/ipUtils';
 import { allocateDhcpLease, allocateStaticHost, lanDefaultsFor } from '../utils/ipAlloc';
 
@@ -17,6 +53,9 @@ interface NodeInspectorProps {
   connectedCables: CableConnection[];
   allNodes?: NetworkNode[];
   allCables?: CableConnection[];
+  onDisconnectCable?: (cableId: string) => void;
+  onSelectCable?: (cableId: string) => void;
+  onOpenAiChat?: (prompt?: string) => void;
 }
 
 export const NodeInspector: React.FC<NodeInspectorProps> = ({
@@ -29,6 +68,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   connectedCables,
   allNodes = [],
   allCables = [],
+  onDisconnectCable,
+  onSelectCable,
+  onOpenAiChat,
 }) => {
   const meta = DEVICE_METADATA[node.type];
   const brandList = DEVICE_BRANDS[node.type] || [];
@@ -88,6 +130,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   const internetStatus = checkInternetAccess(node, allNodes, allCables);
 
   const [activeTab, setActiveTab] = useState<'config' | 'telemetry' | 'hardware' | 'sop'>('config');
+  const [showAddPortDropdown, setShowAddPortDropdown] = useState(false);
   const [speedtestRunning, setSpeedtestRunning] = useState(false);
   const [speedtestResult, setSpeedtestResult] = useState<{
     down: number;
@@ -96,6 +139,36 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
     failed?: boolean;
     error?: string;
   } | null>(null);
+
+  const handleAddPort = (medium: PortMedium) => {
+    const mediumName =
+      medium === 'ethernet'
+        ? 'LAN'
+        : medium === 'fiber'
+        ? 'Optik'
+        : medium === 'coaxial'
+        ? 'Coax'
+        : 'Wi-Fi';
+    const sameMediumCount = node.ports.filter((p) => p.medium === medium).length;
+    const newPort = {
+      id: `p-${node.id}-${Date.now().toString(36)}`,
+      name: `${mediumName} ${sameMediumCount + 1}`,
+      medium,
+      status: 'up' as const,
+    };
+    onUpdateNode({
+      ...node,
+      ports: [...node.ports, newPort],
+    });
+    setShowAddPortDropdown(false);
+  };
+
+  const handleRemovePort = (portId: string) => {
+    onUpdateNode({
+      ...node,
+      ports: node.ports.filter((p) => p.id !== portId),
+    });
+  };
 
   const handleTogglePower = () => {
     onUpdateNode({
@@ -262,15 +335,32 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             </div>
           </div>
 
-          {['pc', 'mikrotik', 'server'].includes(node.type) && onOpenTerminal && (
-            <button
-              onClick={() => onOpenTerminal(node.id)}
-              className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors shadow-2xs"
-            >
-              <Terminal className="h-3.5 w-3.5" />
-              <span>Buka Terminal</span>
-            </button>
-          )}
+          <div className="flex items-center gap-1.5">
+            {onOpenAiChat && (
+              <button
+                onClick={() =>
+                  onOpenAiChat(
+                    `Lakukan diagnosa teknis dan berikan rekomendasi konfigurasi optimal untuk perangkat "${node.name}" (Tipe: ${node.type}, Merk/Model: "${node.brand || ''} ${node.model || ''}").\n- Konfigurasi IP: ${node.ipConfig?.ip || 'Tidak ada'} / ${node.ipConfig?.subnet || '-'}\n- Gateway: ${node.ipConfig?.gateway || '-'}\n- Redaman Optik Rx: ${opticalResult?.rxPowerDbm !== undefined && opticalResult?.rxPowerDbm !== null ? `${opticalResult.rxPowerDbm.toFixed(2)} dBm` : 'N/A'}\n- Kabel terhubung: ${connectedCables.length} kabel fisik.`
+                  )
+                }
+                className="flex items-center gap-1 rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-100 hover:border-sky-400 transition-colors shadow-2xs"
+                title="Tanyakan rekomendasi konfigurasi dan troubleshooting perangkat ini ke AI"
+              >
+                <Bot className="h-3.5 w-3.5 text-sky-600" />
+                <span>Analisa AI</span>
+              </button>
+            )}
+
+            {['pc', 'mikrotik', 'server'].includes(node.type) && onOpenTerminal && (
+              <button
+                onClick={() => onOpenTerminal(node.id)}
+                className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 transition-colors shadow-2xs"
+              >
+                <Terminal className="h-3.5 w-3.5" />
+                <span>Buka Terminal</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* TAB 1: HARDWARE & BRAND SELECTOR */}
@@ -1123,6 +1213,794 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </div>
             )}
 
+            {/* REAL MANAGEABLE SWITCH CONFIGURATION */}
+            {node.type === 'switch_managed' && (
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-3.5 space-y-3.5">
+                <div className="flex items-center justify-between border-b border-indigo-200/80 pb-2">
+                  <div className="font-bold text-indigo-950 text-xs flex items-center gap-1.5">
+                    <Layers className="h-4 w-4 text-indigo-700" />
+                    <span>Switch Manageable ({node.brand || 'Cisco / Ruijie'})</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800">
+                    24 GE + 4 SFP+ (L2/L3)
+                  </span>
+                </div>
+
+                {/* Management IP */}
+                <div className="space-y-1.5 bg-white p-2.5 rounded-lg border border-indigo-100">
+                  <span className="text-[11px] font-bold text-slate-800 block">IP Manajemen Switch:</span>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-semibold block">IP Address</label>
+                      <input
+                        type="text"
+                        value={node.managedSwitchConfig?.managementIp || node.ipConfig?.ip || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onUpdateNode({
+                            ...node,
+                            managedSwitchConfig: {
+                              managementIp: val,
+                              managementSubnet: node.managedSwitchConfig?.managementSubnet || '255.255.255.0',
+                              managementGateway: node.managedSwitchConfig?.managementGateway || '',
+                              stpMode: node.managedSwitchConfig?.stpMode || 'rstp',
+                              igmpSnooping: node.managedSwitchConfig?.igmpSnooping ?? true,
+                              lacpTrunkEnabled: node.managedSwitchConfig?.lacpTrunkEnabled ?? false,
+                              portMirroring: node.managedSwitchConfig?.portMirroring ?? false,
+                              poeBudgetWatts: node.managedSwitchConfig?.poeBudgetWatts || 370,
+                              poeUsageWatts: node.managedSwitchConfig?.poeUsageWatts || 45,
+                              loopProtect: node.managedSwitchConfig?.loopProtect ?? true,
+                            },
+                          });
+                        }}
+                        placeholder="IP Manajemen"
+                        className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-semibold block">Subnet Mask</label>
+                      <input
+                        type="text"
+                        value={node.managedSwitchConfig?.managementSubnet || node.ipConfig?.subnet || '255.255.255.0'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onUpdateNode({
+                            ...node,
+                            managedSwitchConfig: {
+                              managementIp: node.managedSwitchConfig?.managementIp || '',
+                              managementSubnet: val,
+                              managementGateway: node.managedSwitchConfig?.managementGateway || '',
+                              stpMode: node.managedSwitchConfig?.stpMode || 'rstp',
+                              igmpSnooping: node.managedSwitchConfig?.igmpSnooping ?? true,
+                              lacpTrunkEnabled: node.managedSwitchConfig?.lacpTrunkEnabled ?? false,
+                              portMirroring: node.managedSwitchConfig?.portMirroring ?? false,
+                              poeBudgetWatts: node.managedSwitchConfig?.poeBudgetWatts || 370,
+                              poeUsageWatts: node.managedSwitchConfig?.poeUsageWatts || 45,
+                              loopProtect: node.managedSwitchConfig?.loopProtect ?? true,
+                            },
+                          });
+                        }}
+                        className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* STP / RSTP Mode */}
+                <div className="space-y-1.5 bg-white p-2.5 rounded-lg border border-indigo-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-800">Spanning Tree Protocol (STP):</span>
+                    <span className="text-[10px] text-indigo-700 font-mono font-bold uppercase">
+                      {node.managedSwitchConfig?.stpMode || 'rstp'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1">
+                    {(['rstp', 'stp', 'mstp', 'disabled'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() =>
+                          onUpdateNode({
+                            ...node,
+                            managedSwitchConfig: {
+                              managementIp: node.managedSwitchConfig?.managementIp || '',
+                              managementSubnet: node.managedSwitchConfig?.managementSubnet || '255.255.255.0',
+                              managementGateway: node.managedSwitchConfig?.managementGateway || '',
+                              stpMode: mode,
+                              igmpSnooping: node.managedSwitchConfig?.igmpSnooping ?? true,
+                              lacpTrunkEnabled: node.managedSwitchConfig?.lacpTrunkEnabled ?? false,
+                              portMirroring: node.managedSwitchConfig?.portMirroring ?? false,
+                              poeBudgetWatts: node.managedSwitchConfig?.poeBudgetWatts || 370,
+                              poeUsageWatts: node.managedSwitchConfig?.poeUsageWatts || 45,
+                              loopProtect: node.managedSwitchConfig?.loopProtect ?? true,
+                            },
+                          })
+                        }
+                        className={`py-1 px-1.5 text-[10px] font-bold rounded border uppercase text-center transition-all ${
+                          (node.managedSwitchConfig?.stpMode || 'rstp') === mode
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-500 pt-0.5">
+                    RSTP (Rapid STP) mendeteksi loop kabel dan memulihkan topologi dalam hitungan milidetik.
+                  </p>
+                </div>
+
+                {/* Enterprise Features Toggles */}
+                <div className="space-y-1.5">
+                  <label className="flex items-center justify-between bg-white p-2 rounded-lg border border-indigo-100 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs">Loop Protection</span>
+                      <p className="text-[10px] text-slate-500">Mati otomatis port jika loop terdeteksi</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={node.managedSwitchConfig?.loopProtect ?? true}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          managedSwitchConfig: {
+                            managementIp: node.managedSwitchConfig?.managementIp || '',
+                            managementSubnet: node.managedSwitchConfig?.managementSubnet || '255.255.255.0',
+                            managementGateway: node.managedSwitchConfig?.managementGateway || '',
+                            stpMode: node.managedSwitchConfig?.stpMode || 'rstp',
+                            igmpSnooping: node.managedSwitchConfig?.igmpSnooping ?? true,
+                            lacpTrunkEnabled: node.managedSwitchConfig?.lacpTrunkEnabled ?? false,
+                            portMirroring: node.managedSwitchConfig?.portMirroring ?? false,
+                            poeBudgetWatts: node.managedSwitchConfig?.poeBudgetWatts || 370,
+                            poeUsageWatts: node.managedSwitchConfig?.poeUsageWatts || 45,
+                            loopProtect: e.target.checked,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between bg-white p-2 rounded-lg border border-indigo-100 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs">IGMP Snooping</span>
+                      <p className="text-[10px] text-slate-500">Optimasi stream multicast CCTV & IPTV</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={node.managedSwitchConfig?.igmpSnooping ?? true}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          managedSwitchConfig: {
+                            managementIp: node.managedSwitchConfig?.managementIp || '',
+                            managementSubnet: node.managedSwitchConfig?.managementSubnet || '255.255.255.0',
+                            managementGateway: node.managedSwitchConfig?.managementGateway || '',
+                            stpMode: node.managedSwitchConfig?.stpMode || 'rstp',
+                            igmpSnooping: e.target.checked,
+                            lacpTrunkEnabled: node.managedSwitchConfig?.lacpTrunkEnabled ?? false,
+                            portMirroring: node.managedSwitchConfig?.portMirroring ?? false,
+                            poeBudgetWatts: node.managedSwitchConfig?.poeBudgetWatts || 370,
+                            poeUsageWatts: node.managedSwitchConfig?.poeUsageWatts || 45,
+                            loopProtect: node.managedSwitchConfig?.loopProtect ?? true,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between bg-white p-2 rounded-lg border border-indigo-100 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs">LACP Trunk (802.3ad)</span>
+                      <p className="text-[10px] text-slate-500">Agregasi bandwidth port ganda (Link Bonding)</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={node.managedSwitchConfig?.lacpTrunkEnabled ?? false}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          managedSwitchConfig: {
+                            managementIp: node.managedSwitchConfig?.managementIp || '',
+                            managementSubnet: node.managedSwitchConfig?.managementSubnet || '255.255.255.0',
+                            managementGateway: node.managedSwitchConfig?.managementGateway || '',
+                            stpMode: node.managedSwitchConfig?.stpMode || 'rstp',
+                            igmpSnooping: node.managedSwitchConfig?.igmpSnooping ?? true,
+                            lacpTrunkEnabled: e.target.checked,
+                            portMirroring: node.managedSwitchConfig?.portMirroring ?? false,
+                            poeBudgetWatts: node.managedSwitchConfig?.poeBudgetWatts || 370,
+                            poeUsageWatts: node.managedSwitchConfig?.poeUsageWatts || 45,
+                            loopProtect: node.managedSwitchConfig?.loopProtect ?? true,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 rounded text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </label>
+                </div>
+
+                {/* PoE Monitor */}
+                <div className="bg-white p-2.5 rounded-lg border border-indigo-100 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-800 flex items-center gap-1">
+                      <Zap className="h-3.5 w-3.5 text-amber-500" />
+                      <span>PoE Power Budget (802.3at/af)</span>
+                    </span>
+                    <span className="font-mono text-[11px] font-bold text-indigo-700">
+                      {node.managedSwitchConfig?.poeUsageWatts || 45}W / {node.managedSwitchConfig?.poeBudgetWatts || 370}W
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-indigo-600 h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min(100, Math.round(((node.managedSwitchConfig?.poeUsageWatts || 45) / (node.managedSwitchConfig?.poeBudgetWatts || 370)) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-500">
+                    Sisa daya PoE: {(node.managedSwitchConfig?.poeBudgetWatts || 370) - (node.managedSwitchConfig?.poeUsageWatts || 45)}W untuk AP & CCTV.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* REAL MESH WI-FI CONFIGURATION */}
+            {node.type === 'mesh' && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3.5 space-y-3.5">
+                <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2">
+                  <div className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
+                    <Radio className="h-4 w-4 text-emerald-600" />
+                    <span>Mesh Wi-Fi System ({node.brand || 'TP-Link Deco / Ruijie Reyee'})</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                    Seamless Roaming 802.11k/v/r
+                  </span>
+                </div>
+
+                {/* Node Role Selector */}
+                <div className="space-y-1.5 bg-white p-2.5 rounded-lg border border-emerald-100">
+                  <label className="text-[11px] font-bold text-slate-800 block">Peran Node dalam Jaringan Mesh:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() =>
+                        onUpdateNode({
+                          ...node,
+                          meshConfig: {
+                            role: 'root',
+                            backhaulType: node.meshConfig?.backhaulType || 'wireless_5ghz',
+                            fastRoaming: node.meshConfig?.fastRoaming ?? true,
+                            ssid: node.meshConfig?.ssid || 'Mesh-WiFi-Home',
+                            wifiKey: node.meshConfig?.wifiKey || 'admin12345',
+                            bandSteering: node.meshConfig?.bandSteering ?? true,
+                            rssiThresholdDbm: node.meshConfig?.rssiThresholdDbm || -70,
+                            channel24G: node.meshConfig?.channel24G || 6,
+                            channel5G: node.meshConfig?.channel5G || 44,
+                            hopCount: 0,
+                          },
+                        })
+                      }
+                      className={`p-2 rounded-lg border text-left text-xs transition-all ${
+                        (node.meshConfig?.role || 'root') === 'root'
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="block font-bold">Root Node (Master)</span>
+                      <span className="text-[10px] font-normal text-slate-500 block">Terhubung langsung ke Router / Modem</span>
+                    </button>
+                    <button
+                      onClick={() =>
+                        onUpdateNode({
+                          ...node,
+                          meshConfig: {
+                            role: 'satellite',
+                            backhaulType: node.meshConfig?.backhaulType || 'wireless_5ghz',
+                            fastRoaming: node.meshConfig?.fastRoaming ?? true,
+                            ssid: node.meshConfig?.ssid || 'Mesh-WiFi-Home',
+                            wifiKey: node.meshConfig?.wifiKey || 'admin12345',
+                            bandSteering: node.meshConfig?.bandSteering ?? true,
+                            rssiThresholdDbm: node.meshConfig?.rssiThresholdDbm || -70,
+                            channel24G: node.meshConfig?.channel24G || 6,
+                            channel5G: node.meshConfig?.channel5G || 44,
+                            hopCount: (node.meshConfig?.hopCount || 0) > 0 ? node.meshConfig!.hopCount : 1,
+                          },
+                        })
+                      }
+                      className={`p-2 rounded-lg border text-left text-xs transition-all ${
+                        node.meshConfig?.role === 'satellite'
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="block font-bold">Satellite Node (Extender)</span>
+                      <span className="text-[10px] font-normal text-slate-500 block">Memperluas sinyal nirkabel tanpa jeda</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Backhaul Type */}
+                <div className="space-y-1.5 bg-white p-2.5 rounded-lg border border-emerald-100">
+                  <label className="text-[11px] font-bold text-slate-800 block">Jalur Interkoneksi Backhaul:</label>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <button
+                      onClick={() =>
+                        onUpdateNode({
+                          ...node,
+                          meshConfig: {
+                            role: node.meshConfig?.role || 'root',
+                            backhaulType: 'ethernet',
+                            fastRoaming: node.meshConfig?.fastRoaming ?? true,
+                            ssid: node.meshConfig?.ssid || 'Mesh-WiFi-Home',
+                            wifiKey: node.meshConfig?.wifiKey || 'admin12345',
+                            bandSteering: node.meshConfig?.bandSteering ?? true,
+                            rssiThresholdDbm: node.meshConfig?.rssiThresholdDbm || -70,
+                            channel24G: node.meshConfig?.channel24G || 6,
+                            channel5G: node.meshConfig?.channel5G || 44,
+                          },
+                        })
+                      }
+                      className={`p-2 rounded-lg border text-left transition-all ${
+                        node.meshConfig?.backhaulType === 'ethernet'
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="block font-bold">Ethernet Backhaul (Kabel)</span>
+                      <span className="text-[10px] font-normal text-slate-500 block">1000 Mbps Full Duplex (Terstabil)</span>
+                    </button>
+                    <button
+                      onClick={() =>
+                        onUpdateNode({
+                          ...node,
+                          meshConfig: {
+                            role: node.meshConfig?.role || 'root',
+                            backhaulType: 'wireless_5ghz',
+                            fastRoaming: node.meshConfig?.fastRoaming ?? true,
+                            ssid: node.meshConfig?.ssid || 'Mesh-WiFi-Home',
+                            wifiKey: node.meshConfig?.wifiKey || 'admin12345',
+                            bandSteering: node.meshConfig?.bandSteering ?? true,
+                            rssiThresholdDbm: node.meshConfig?.rssiThresholdDbm || -70,
+                            channel24G: node.meshConfig?.channel24G || 6,
+                            channel5G: node.meshConfig?.channel5G || 44,
+                          },
+                        })
+                      }
+                      className={`p-2 rounded-lg border text-left transition-all ${
+                        (node.meshConfig?.backhaulType || 'wireless_5ghz') === 'wireless_5ghz'
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-2xs'
+                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="block font-bold">Wireless 5GHz Backhaul</span>
+                      <span className="text-[10px] font-normal text-slate-500 block">Nirkabel dedicated frekuensi 5GHz</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Mesh SSID & Password */}
+                <div className="space-y-2 bg-white p-2.5 rounded-lg border border-emerald-100">
+                  <span className="text-[11px] font-bold text-slate-800 block">Setelan SSID Wi-Fi Tunggal:</span>
+                  <div className="space-y-1.5">
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-semibold block">Nama SSID Mesh</label>
+                      <input
+                        type="text"
+                        value={node.meshConfig?.ssid || 'Mesh-WiFi-Home'}
+                        onChange={(e) =>
+                          onUpdateNode({
+                            ...node,
+                            meshConfig: {
+                              role: node.meshConfig?.role || 'root',
+                              backhaulType: node.meshConfig?.backhaulType || 'wireless_5ghz',
+                              fastRoaming: node.meshConfig?.fastRoaming ?? true,
+                              ssid: e.target.value,
+                              wifiKey: node.meshConfig?.wifiKey || 'admin12345',
+                              bandSteering: node.meshConfig?.bandSteering ?? true,
+                              rssiThresholdDbm: node.meshConfig?.rssiThresholdDbm || -70,
+                              channel24G: node.meshConfig?.channel24G || 6,
+                              channel5G: node.meshConfig?.channel5G || 44,
+                            },
+                          })
+                        }
+                        className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-semibold block">Password WPA2/WPA3</label>
+                      <input
+                        type="text"
+                        value={node.meshConfig?.wifiKey || 'admin12345'}
+                        onChange={(e) =>
+                          onUpdateNode({
+                            ...node,
+                            meshConfig: {
+                              role: node.meshConfig?.role || 'root',
+                              backhaulType: node.meshConfig?.backhaulType || 'wireless_5ghz',
+                              fastRoaming: node.meshConfig?.fastRoaming ?? true,
+                              ssid: node.meshConfig?.ssid || 'Mesh-WiFi-Home',
+                              wifiKey: e.target.value,
+                              bandSteering: node.meshConfig?.bandSteering ?? true,
+                              rssiThresholdDbm: node.meshConfig?.rssiThresholdDbm || -70,
+                              channel24G: node.meshConfig?.channel24G || 6,
+                              channel5G: node.meshConfig?.channel5G || 44,
+                            },
+                          })
+                        }
+                        className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Roaming & Band Steering */}
+                <div className="space-y-1.5">
+                  <label className="flex items-center justify-between bg-white p-2 rounded-lg border border-emerald-100 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs">802.11k/v/r Fast Roaming</span>
+                      <p className="text-[10px] text-slate-500">Pindah access point otomatis tanpa putus koneksi</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={node.meshConfig?.fastRoaming ?? true}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          meshConfig: {
+                            role: node.meshConfig?.role || 'root',
+                            backhaulType: node.meshConfig?.backhaulType || 'wireless_5ghz',
+                            fastRoaming: e.target.checked,
+                            ssid: node.meshConfig?.ssid || 'Mesh-WiFi-Home',
+                            wifiKey: node.meshConfig?.wifiKey || 'admin12345',
+                            bandSteering: node.meshConfig?.bandSteering ?? true,
+                            rssiThresholdDbm: node.meshConfig?.rssiThresholdDbm || -70,
+                            channel24G: node.meshConfig?.channel24G || 6,
+                            channel5G: node.meshConfig?.channel5G || 44,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between bg-white p-2 rounded-lg border border-emerald-100 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs">Band Steering (Smart Connect)</span>
+                      <p className="text-[10px] text-slate-500">Gabungkan 2.4GHz & 5GHz jadi satu nama otomatis</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={node.meshConfig?.bandSteering ?? true}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          meshConfig: {
+                            role: node.meshConfig?.role || 'root',
+                            backhaulType: node.meshConfig?.backhaulType || 'wireless_5ghz',
+                            fastRoaming: node.meshConfig?.fastRoaming ?? true,
+                            ssid: node.meshConfig?.ssid || 'Mesh-WiFi-Home',
+                            wifiKey: node.meshConfig?.wifiKey || 'admin12345',
+                            bandSteering: e.target.checked,
+                            rssiThresholdDbm: node.meshConfig?.rssiThresholdDbm || -70,
+                            channel24G: node.meshConfig?.channel24G || 6,
+                            channel5G: node.meshConfig?.channel5G || 44,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 rounded text-emerald-600 focus:ring-emerald-500"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* REAL ACCESS POINT POINT-TO-POINT CONFIGURATION */}
+            {node.type === 'ap_ptp' && (
+              <div className="rounded-xl border border-sky-300 bg-sky-50/40 p-3.5 space-y-3.5">
+                <div className="flex items-center justify-between border-b border-sky-200 pb-2">
+                  <div className="font-bold text-sky-950 text-xs flex items-center gap-1.5">
+                    <Radio className="h-4 w-4 text-sky-600" />
+                    <span>Access Point PtP ({node.brand || 'Ubiquiti / MikroTik'})</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-sky-100 text-sky-800">
+                    Outdoor Wireless Bridge
+                  </span>
+                </div>
+
+                {/* Operating Mode */}
+                <div className="space-y-1.5 bg-white p-2.5 rounded-lg border border-sky-100">
+                  <label className="text-[11px] font-bold text-slate-800 block">Mode Operasi Nirkabel:</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { id: 'ap_ptp', label: 'Access Point PtP', desc: 'Pemancar Tower' },
+                      { id: 'station_ptp', label: 'Station PtP', desc: 'Penerima Klien' },
+                      { id: 'ap_ptmp', label: 'AP PtMP', desc: 'Multi-Point' },
+                    ].map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() =>
+                          onUpdateNode({
+                            ...node,
+                            ptpConfig: {
+                              mode: m.id as any,
+                              frequencyMhz: node.ptpConfig?.frequencyMhz || 5745,
+                              channelWidthMhz: node.ptpConfig?.channelWidthMhz || 80,
+                              distanceKm: node.ptpConfig?.distanceKm || 1.5,
+                              txPowerDbm: node.ptpConfig?.txPowerDbm || 23,
+                              antennaGainDbi: node.ptpConfig?.antennaGainDbi || 23,
+                              ssid: node.ptpConfig?.ssid || 'PTP-LINK-TOWER',
+                              securityKey: node.ptpConfig?.securityKey || 'wpa2ptpsecret',
+                              signalRssiDbm: node.ptpConfig?.signalRssiDbm || -56,
+                              linkQualityPercent: node.ptpConfig?.linkQualityPercent || 99,
+                            },
+                          })
+                        }
+                        className={`p-1.5 text-center rounded border text-xs transition-all ${
+                          (node.ptpConfig?.mode || 'ap_ptp') === m.id
+                            ? 'bg-sky-600 text-white font-bold border-sky-600 shadow-2xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <span className="block font-bold text-[10.5px]">{m.label}</span>
+                        <span className="text-[9px] opacity-80 block">{m.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Frequency & Channel Width */}
+                <div className="bg-white p-2.5 rounded-lg border border-sky-100 space-y-2 text-xs">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-semibold block">Frekuensi (MHz)</label>
+                      <select
+                        value={node.ptpConfig?.frequencyMhz || 5745}
+                        onChange={(e) =>
+                          onUpdateNode({
+                            ...node,
+                            ptpConfig: {
+                              mode: node.ptpConfig?.mode || 'ap_ptp',
+                              frequencyMhz: Number(e.target.value),
+                              channelWidthMhz: node.ptpConfig?.channelWidthMhz || 80,
+                              distanceKm: node.ptpConfig?.distanceKm || 1.5,
+                              txPowerDbm: node.ptpConfig?.txPowerDbm || 23,
+                              antennaGainDbi: node.ptpConfig?.antennaGainDbi || 23,
+                              ssid: node.ptpConfig?.ssid || 'PTP-LINK-TOWER',
+                              securityKey: node.ptpConfig?.securityKey || 'wpa2ptpsecret',
+                              signalRssiDbm: node.ptpConfig?.signalRssiDbm || -56,
+                              linkQualityPercent: node.ptpConfig?.linkQualityPercent || 99,
+                            },
+                          })
+                        }
+                        className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                      >
+                        <option value={5180}>5180 MHz (UNII-1 Ch 36)</option>
+                        <option value={5240}>5240 MHz (UNII-1 Ch 48)</option>
+                        <option value={5500}>5500 MHz (DFS Ch 100)</option>
+                        <option value={5745}>5745 MHz (UNII-3 Ch 149)</option>
+                        <option value={5825}>5825 MHz (UNII-3 Ch 165)</option>
+                        <option value={60000}>60 GHz (Millimeter Wave 10G)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-semibold block">Channel Width</label>
+                      <select
+                        value={node.ptpConfig?.channelWidthMhz || 80}
+                        onChange={(e) =>
+                          onUpdateNode({
+                            ...node,
+                            ptpConfig: {
+                              mode: node.ptpConfig?.mode || 'ap_ptp',
+                              frequencyMhz: node.ptpConfig?.frequencyMhz || 5745,
+                              channelWidthMhz: Number(e.target.value) as any,
+                              distanceKm: node.ptpConfig?.distanceKm || 1.5,
+                              txPowerDbm: node.ptpConfig?.txPowerDbm || 23,
+                              antennaGainDbi: node.ptpConfig?.antennaGainDbi || 23,
+                              ssid: node.ptpConfig?.ssid || 'PTP-LINK-TOWER',
+                              securityKey: node.ptpConfig?.securityKey || 'wpa2ptpsecret',
+                              signalRssiDbm: node.ptpConfig?.signalRssiDbm || -56,
+                              linkQualityPercent: node.ptpConfig?.linkQualityPercent || 99,
+                            },
+                          })
+                        }
+                        className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                      >
+                        <option value={20}>20 MHz (Jangkauan Maksimal)</option>
+                        <option value={40}>40 MHz (Standar Industri)</option>
+                        <option value={80}>80 MHz (Throughput Tinggi)</option>
+                        <option value={160}>160 MHz (Ultra Gigabit)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-semibold block">SSID Wireless Bridge</label>
+                      <input
+                        type="text"
+                        value={node.ptpConfig?.ssid || 'PTP-LINK-TOWER'}
+                        onChange={(e) =>
+                          onUpdateNode({
+                            ...node,
+                            ptpConfig: {
+                              mode: node.ptpConfig?.mode || 'ap_ptp',
+                              frequencyMhz: node.ptpConfig?.frequencyMhz || 5745,
+                              channelWidthMhz: node.ptpConfig?.channelWidthMhz || 80,
+                              distanceKm: node.ptpConfig?.distanceKm || 1.5,
+                              txPowerDbm: node.ptpConfig?.txPowerDbm || 23,
+                              antennaGainDbi: node.ptpConfig?.antennaGainDbi || 23,
+                              ssid: e.target.value,
+                              securityKey: node.ptpConfig?.securityKey || 'wpa2ptpsecret',
+                              signalRssiDbm: node.ptpConfig?.signalRssiDbm || -56,
+                              linkQualityPercent: node.ptpConfig?.linkQualityPercent || 99,
+                            },
+                          })
+                        }
+                        className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-slate-500 font-semibold block">Kunci WPA2-PSK</label>
+                      <input
+                        type="text"
+                        value={node.ptpConfig?.securityKey || 'wpa2ptpsecret'}
+                        onChange={(e) =>
+                          onUpdateNode({
+                            ...node,
+                            ptpConfig: {
+                              mode: node.ptpConfig?.mode || 'ap_ptp',
+                              frequencyMhz: node.ptpConfig?.frequencyMhz || 5745,
+                              channelWidthMhz: node.ptpConfig?.channelWidthMhz || 80,
+                              distanceKm: node.ptpConfig?.distanceKm || 1.5,
+                              txPowerDbm: node.ptpConfig?.txPowerDbm || 23,
+                              antennaGainDbi: node.ptpConfig?.antennaGainDbi || 23,
+                              ssid: node.ptpConfig?.ssid || 'PTP-LINK-TOWER',
+                              securityKey: e.target.value,
+                              signalRssiDbm: node.ptpConfig?.signalRssiDbm || -56,
+                              linkQualityPercent: node.ptpConfig?.linkQualityPercent || 99,
+                            },
+                          })
+                        }
+                        className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pointing & Sinyal Meter */}
+                <div className="bg-white p-2.5 rounded-lg border border-sky-100 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-800 flex items-center gap-1">
+                      <Gauge className="h-3.5 w-3.5 text-sky-600" />
+                      <span>Indikator Pointing Sinyal RSSI</span>
+                    </span>
+                    <span className="font-mono text-[11px] font-bold text-emerald-600">
+                      {node.ptpConfig?.signalRssiDbm || -56} dBm (99% CCQ)
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden flex">
+                    <div className="bg-emerald-500 h-full w-[85%] rounded-full" />
+                  </div>
+                  <div className="flex justify-between text-[9.5px] text-slate-500 font-mono">
+                    <span>Noise Floor: -96 dBm</span>
+                    <span>SNR: 40 dB (Sangat Bagus)</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* REAL PASSIVE OPTICAL SPLITTER CONFIGURATION */}
+            {node.type === 'splitter' && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-3.5 space-y-3.5">
+                <div className="flex items-center justify-between border-b border-rose-200 pb-2">
+                  <div className="font-bold text-rose-950 text-xs flex items-center gap-1.5">
+                    <Share2 className="h-4 w-4 text-rose-600" />
+                    <span>Optical PLC Splitter ({node.opticalConfig?.splitterRatio || '1:8'})</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800">
+                    Redaman: ~{SPLITTER_LOSS_MAP[node.opticalConfig?.splitterRatio || '1:8'] || 10.5} dB
+                  </span>
+                </div>
+
+                {/* Splitter Ratio Selection */}
+                <div className="space-y-1.5 bg-white p-2.5 rounded-lg border border-rose-100">
+                  <label className="text-[11px] font-bold text-slate-800 block">
+                    Pilih Rasio Splitter Pembagi Fiber:
+                  </label>
+                  <div className="grid grid-cols-5 gap-1">
+                    {(['1:2', '1:4', '1:8', '1:16', '1:32'] as const).map((ratio) => {
+                      const isCurrent = (node.opticalConfig?.splitterRatio || '1:8') === ratio;
+                      const loss = SPLITTER_LOSS_MAP[ratio];
+                      return (
+                        <button
+                          key={ratio}
+                          onClick={() => {
+                            const numOutputs = parseInt(ratio.split(':')[1], 10);
+                            const existingInputPort = node.ports.find((p) => p.name === 'Input');
+                            const inputPort = existingInputPort || {
+                              id: `p-${node.id}-input`,
+                              name: 'Input',
+                              medium: 'fiber' as const,
+                              status: 'up' as const,
+                            };
+
+                            const newPorts: typeof node.ports = [inputPort];
+                            for (let i = 1; i <= numOutputs; i++) {
+                              const portName = `Out ${i}`;
+                              const existing = node.ports.find((p) => p.name === portName);
+                              newPorts.push(
+                                existing || {
+                                  id: `p-${node.id}-out-${i}`,
+                                  name: portName,
+                                  medium: 'fiber' as const,
+                                  status: 'up' as const,
+                                }
+                              );
+                            }
+
+                            onUpdateNode({
+                              ...node,
+                              ports: newPorts,
+                              opticalConfig: {
+                                ...node.opticalConfig,
+                                splitterRatio: ratio,
+                                attenuationDb: loss,
+                              },
+                            });
+                          }}
+                          className={`p-1.5 text-center rounded border transition-all ${
+                            isCurrent
+                              ? 'bg-rose-600 text-white font-bold border-rose-600 shadow-2xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <span className="block font-bold text-xs">{ratio}</span>
+                          <span className="text-[9px] opacity-80 block">~{loss}dB</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-slate-500 pt-0.5">
+                    Mengubah rasio splitter otomatis menyesuaikan jumlah port output fisik dan redaman optik pada simulator OPM.
+                  </p>
+                </div>
+
+                {/* Connector Type */}
+                <div className="bg-white p-2.5 rounded-lg border border-rose-100 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-slate-800 text-xs block">Tipe Konektor Pigtail:</span>
+                    <span className="text-[10px] text-slate-500">
+                      {node.opticalConfig?.connectorType || 'SC/UPC'} (Standar FTTH GPON)
+                    </span>
+                  </div>
+                  <div className="flex gap-1">
+                    {(['SC/UPC', 'SC/APC'] as const).map((conn) => (
+                      <button
+                        key={conn}
+                        onClick={() =>
+                          onUpdateNode({
+                            ...node,
+                            opticalConfig: {
+                              ...node.opticalConfig,
+                              connectorType: conn,
+                            },
+                          })
+                        }
+                        className={`px-2 py-1 text-[10px] font-bold rounded border uppercase ${
+                          (node.opticalConfig?.connectorType || 'SC/UPC') === conn
+                            ? 'bg-rose-600 text-white border-rose-600'
+                            : 'bg-slate-50 text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {conn}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* REAL CCTV CONFIGURATION */}
             {node.type === 'cctv' && (
               <div className="rounded-xl border border-purple-200 bg-purple-50/40 p-3.5 space-y-3">
@@ -1728,8 +2606,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </div>
             )}
 
-            {/* PC Speedtest Feature */}
-            {node.type === 'pc' && (
+            {/* PC & Laptop Speedtest Feature */}
+            {(node.type === 'pc' || node.type === 'laptop') && (
               <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-slate-800 text-[11px] flex items-center gap-1.5">
@@ -1783,6 +2661,391 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 )}
               </div>
             )}
+
+            {/* REAL ACCESS POINT ENTERPRISE CONFIGURATION */}
+            {node.type === 'access_point' && (
+              <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3.5 space-y-3">
+                <div className="flex items-center justify-between border-b border-sky-200/80 pb-2">
+                  <div className="font-bold text-sky-950 text-xs flex items-center gap-1.5">
+                    <Wifi className="h-4 w-4 text-sky-600" />
+                    <span>Access Point Enterprise ({node.brand || 'UniFi / Ruijie'})</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-sky-100 text-sky-800">
+                    Wi-Fi 6 PoE
+                  </span>
+                </div>
+
+                <div className="space-y-2 bg-white p-2.5 rounded-lg border border-sky-100 text-xs">
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-semibold block">SSID 2.4GHz</label>
+                    <input
+                      type="text"
+                      value={node.accessPointConfig?.ssid24 || 'Office-WiFi'}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          accessPointConfig: {
+                            ssid24: e.target.value,
+                            ssid5: node.accessPointConfig?.ssid5 || 'Office-WiFi-5G',
+                            wifiKey: node.accessPointConfig?.wifiKey || 'kantor12345',
+                            channel24: node.accessPointConfig?.channel24 || 1,
+                            channel5: node.accessPointConfig?.channel5 || 36,
+                            poePowered: node.accessPointConfig?.poePowered ?? true,
+                            vlanTagged: node.accessPointConfig?.vlanTagged ?? true,
+                            vlanId: node.accessPointConfig?.vlanId || 20,
+                            txPowerDbm: node.accessPointConfig?.txPowerDbm || 20,
+                            guestPortalEnabled: node.accessPointConfig?.guestPortalEnabled ?? false,
+                          },
+                        })
+                      }
+                      className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-semibold block">SSID 5GHz (High Speed)</label>
+                    <input
+                      type="text"
+                      value={node.accessPointConfig?.ssid5 || 'Office-WiFi-5G'}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          accessPointConfig: {
+                            ssid24: node.accessPointConfig?.ssid24 || 'Office-WiFi',
+                            ssid5: e.target.value,
+                            wifiKey: node.accessPointConfig?.wifiKey || 'kantor12345',
+                            channel24: node.accessPointConfig?.channel24 || 1,
+                            channel5: node.accessPointConfig?.channel5 || 36,
+                            poePowered: node.accessPointConfig?.poePowered ?? true,
+                            vlanTagged: node.accessPointConfig?.vlanTagged ?? true,
+                            vlanId: node.accessPointConfig?.vlanId || 20,
+                            txPowerDbm: node.accessPointConfig?.txPowerDbm || 20,
+                            guestPortalEnabled: node.accessPointConfig?.guestPortalEnabled ?? false,
+                          },
+                        })
+                      }
+                      className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-semibold block">Password WPA2/WPA3</label>
+                    <input
+                      type="text"
+                      value={node.accessPointConfig?.wifiKey || 'kantor12345'}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          accessPointConfig: {
+                            ssid24: node.accessPointConfig?.ssid24 || 'Office-WiFi',
+                            ssid5: node.accessPointConfig?.ssid5 || 'Office-WiFi-5G',
+                            wifiKey: e.target.value,
+                            channel24: node.accessPointConfig?.channel24 || 1,
+                            channel5: node.accessPointConfig?.channel5 || 36,
+                            poePowered: node.accessPointConfig?.poePowered ?? true,
+                            vlanTagged: node.accessPointConfig?.vlanTagged ?? true,
+                            vlanId: node.accessPointConfig?.vlanId || 20,
+                            txPowerDbm: node.accessPointConfig?.txPowerDbm || 20,
+                            guestPortalEnabled: node.accessPointConfig?.guestPortalEnabled ?? false,
+                          },
+                        })
+                      }
+                      className="w-full rounded border border-slate-200 px-2 py-1 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="flex items-center justify-between bg-white p-2 rounded-lg border border-sky-100 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs">VLAN Tagging (SSID Tamu / Hotspot)</span>
+                      <p className="text-[10px] text-slate-500">Pisahkan traffic tamu via VLAN ID</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={node.accessPointConfig?.vlanTagged ?? true}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          accessPointConfig: {
+                            ssid24: node.accessPointConfig?.ssid24 || 'Office-WiFi',
+                            ssid5: node.accessPointConfig?.ssid5 || 'Office-WiFi-5G',
+                            wifiKey: node.accessPointConfig?.wifiKey || 'kantor12345',
+                            channel24: node.accessPointConfig?.channel24 || 1,
+                            channel5: node.accessPointConfig?.channel5 || 36,
+                            poePowered: node.accessPointConfig?.poePowered ?? true,
+                            vlanTagged: e.target.checked,
+                            vlanId: node.accessPointConfig?.vlanId || 20,
+                            txPowerDbm: node.accessPointConfig?.txPowerDbm || 20,
+                            guestPortalEnabled: node.accessPointConfig?.guestPortalEnabled ?? false,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 rounded text-sky-600 focus:ring-sky-500"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between bg-white p-2 rounded-lg border border-sky-100 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs">Captive Guest Portal</span>
+                      <p className="text-[10px] text-slate-500">Halaman login web voucher hotspot</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={node.accessPointConfig?.guestPortalEnabled ?? false}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          accessPointConfig: {
+                            ssid24: node.accessPointConfig?.ssid24 || 'Office-WiFi',
+                            ssid5: node.accessPointConfig?.ssid5 || 'Office-WiFi-5G',
+                            wifiKey: node.accessPointConfig?.wifiKey || 'kantor12345',
+                            channel24: node.accessPointConfig?.channel24 || 1,
+                            channel5: node.accessPointConfig?.channel5 || 36,
+                            poePowered: node.accessPointConfig?.poePowered ?? true,
+                            vlanTagged: node.accessPointConfig?.vlanTagged ?? true,
+                            vlanId: node.accessPointConfig?.vlanId || 20,
+                            txPowerDbm: node.accessPointConfig?.txPowerDbm || 20,
+                            guestPortalEnabled: e.target.checked,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 rounded text-sky-600 focus:ring-sky-500"
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* REAL HARDWARE FIREWALL CONFIGURATION */}
+            {node.type === 'firewall' && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-3.5 space-y-3">
+                <div className="flex items-center justify-between border-b border-rose-200/80 pb-2">
+                  <div className="font-bold text-rose-950 text-xs flex items-center gap-1.5">
+                    <Shield className="h-4 w-4 text-rose-600" />
+                    <span>Hardware Firewall / UTM ({node.brand || 'Fortinet'})</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800">
+                    UTM Next-Gen
+                  </span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="flex items-center justify-between bg-white p-2 rounded-lg border border-rose-100 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs">Stateful Firewall & NAT Masquerade</span>
+                      <p className="text-[10px] text-slate-500">Translasi IP privat LAN ke IP publik WAN</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={node.firewallConfig?.natEnabled ?? true}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          firewallConfig: {
+                            natEnabled: e.target.checked,
+                            ipsEnabled: node.firewallConfig?.ipsEnabled ?? true,
+                            vpnServer: node.firewallConfig?.vpnServer ?? false,
+                            wanFailover: node.firewallConfig?.wanFailover ?? true,
+                            blockedPorts: node.firewallConfig?.blockedPorts || [23, 445, 3389],
+                            bandwidthShaping: node.firewallConfig?.bandwidthShaping ?? true,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 rounded text-rose-600 focus:ring-rose-500"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between bg-white p-2 rounded-lg border border-rose-100 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs">Intrusion Prevention System (IPS)</span>
+                      <p className="text-[10px] text-slate-500">Blokir otomatis serangan exploit dan port scanning</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={node.firewallConfig?.ipsEnabled ?? true}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          firewallConfig: {
+                            natEnabled: node.firewallConfig?.natEnabled ?? true,
+                            ipsEnabled: e.target.checked,
+                            vpnServer: node.firewallConfig?.vpnServer ?? false,
+                            wanFailover: node.firewallConfig?.wanFailover ?? true,
+                            blockedPorts: node.firewallConfig?.blockedPorts || [23, 445, 3389],
+                            bandwidthShaping: node.firewallConfig?.bandwidthShaping ?? true,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 rounded text-rose-600 focus:ring-rose-500"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between bg-white p-2 rounded-lg border border-rose-100 cursor-pointer">
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs">Dual-WAN Failover</span>
+                      <p className="text-[10px] text-slate-500">Pindah jalur internet otomatis saat ISP utama putus</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={node.firewallConfig?.wanFailover ?? true}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          firewallConfig: {
+                            natEnabled: node.firewallConfig?.natEnabled ?? true,
+                            ipsEnabled: node.firewallConfig?.ipsEnabled ?? true,
+                            vpnServer: node.firewallConfig?.vpnServer ?? false,
+                            wanFailover: e.target.checked,
+                            blockedPorts: node.firewallConfig?.blockedPorts || [23, 445, 3389],
+                            bandwidthShaping: node.firewallConfig?.bandwidthShaping ?? true,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 rounded text-rose-600 focus:ring-rose-500"
+                    />
+                  </label>
+                </div>
+
+                <div className="bg-white p-2 rounded-lg border border-rose-100 text-xs space-y-1">
+                  <span className="text-[10px] font-bold text-slate-700 block">Port Rentan Terblokir (Security Policy):</span>
+                  <div className="flex flex-wrap gap-1">
+                    {['Port 23 (Telnet)', 'Port 445 (SMB/WannaCry)', 'Port 3389 (RDP Public)'].map((p) => (
+                      <span key={p} className="text-[9.5px] px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 font-mono">
+                        {p}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* REAL NAS STORAGE & NVR CONFIGURATION */}
+            {node.type === 'nas' && (
+              <div className="rounded-xl border border-slate-300 bg-slate-50/60 p-3.5 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <HardDrive className="h-4 w-4 text-slate-700" />
+                    <span>NAS Storage & NVR ({node.brand || 'Synology'})</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-800">
+                    {node.nasConfig?.raidLevel || 'RAID 5'} (16 TB)
+                  </span>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold text-slate-600">Kapasitas Penyimpanan:</span>
+                    <span className="font-mono text-[11px] font-bold text-slate-800">4.2 TB / 16.0 TB (26%)</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="bg-sky-600 h-full rounded-full" style={{ width: '26%' }} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 pt-1 text-[10px]">
+                    <div className="p-1 rounded bg-slate-50 border border-slate-100">
+                      <span className="text-slate-500 block">Protokol Share:</span>
+                      <strong className="text-slate-800 font-mono">SMB 3.0 / NFS v4</strong>
+                    </div>
+                    <div className="p-1 rounded bg-slate-50 border border-slate-100">
+                      <span className="text-slate-500 block">Rekaman CCTV:</span>
+                      <strong className="text-emerald-700">Aktif (Continuous)</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* REAL VOIP PHONE CONFIGURATION */}
+            {node.type === 'voip_phone' && (
+              <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3.5 space-y-3">
+                <div className="flex items-center justify-between border-b border-sky-200/80 pb-2">
+                  <div className="font-bold text-sky-950 text-xs flex items-center gap-1.5">
+                    <Phone className="h-4 w-4 text-sky-600" />
+                    <span>IP Phone VoIP ({node.brand || 'Yealink'})</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                    SIP REGISTERED
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 bg-white p-2.5 rounded-lg border border-sky-100 text-xs font-mono">
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-semibold font-sans block">Nomor Ekstensi</label>
+                    <input
+                      type="text"
+                      value={node.voipConfig?.sipExtension || '1001'}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          voipConfig: {
+                            sipExtension: e.target.value,
+                            sipServerIp: node.voipConfig?.sipServerIp || '192.168.1.200',
+                            codec: node.voipConfig?.codec || 'G.711u',
+                            voiceVlanId: node.voipConfig?.voiceVlanId || 30,
+                            status: 'registered',
+                          },
+                        })
+                      }
+                      className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-500 font-semibold font-sans block">Voice VLAN ID</label>
+                    <input
+                      type="number"
+                      value={node.voipConfig?.voiceVlanId || 30}
+                      onChange={(e) =>
+                        onUpdateNode({
+                          ...node,
+                          voipConfig: {
+                            sipExtension: node.voipConfig?.sipExtension || '1001',
+                            sipServerIp: node.voipConfig?.sipServerIp || '192.168.1.200',
+                            codec: node.voipConfig?.codec || 'G.711u',
+                            voiceVlanId: Number(e.target.value),
+                            status: 'registered',
+                          },
+                        })
+                      }
+                      className="w-full rounded border border-slate-200 px-2 py-1 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* REAL NETWORK PRINTER CONFIGURATION */}
+            {node.type === 'printer' && (
+              <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-3.5 space-y-3">
+                <div className="flex items-center justify-between border-b border-teal-200/80 pb-2">
+                  <div className="font-bold text-teal-950 text-xs flex items-center gap-1.5">
+                    <Printer className="h-4 w-4 text-teal-700" />
+                    <span>Printer Jaringan ({node.brand || 'Epson / HP'})</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                    SIAP CETAK
+                  </span>
+                </div>
+
+                <div className="bg-white p-2.5 rounded-lg border border-teal-100 text-xs space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-600 font-semibold">Protokol Print:</span>
+                    <span className="font-mono text-slate-800 font-bold">RAW Port 9100 / IPP 631</span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-slate-500 font-semibold block">Level Tinta / Toner:</span>
+                    <div className="grid grid-cols-4 gap-1 text-center font-mono text-[9px]">
+                      <div className="p-1 rounded bg-cyan-50 border border-cyan-200">
+                        <div className="font-bold text-cyan-800">C: 85%</div>
+                      </div>
+                      <div className="p-1 rounded bg-pink-50 border border-pink-200">
+                        <div className="font-bold text-pink-800">M: 90%</div>
+                      </div>
+                      <div className="p-1 rounded bg-yellow-50 border border-yellow-200">
+                        <div className="font-bold text-yellow-800">Y: 88%</div>
+                      </div>
+                      <div className="p-1 rounded bg-slate-100 border border-slate-300">
+                        <div className="font-bold text-slate-900">K: 95%</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1823,21 +3086,50 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             )}
 
             {/* Ports Status Table */}
-            <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2">
-              <span className="font-bold text-slate-800 text-[11px] block uppercase">
-                Daftar Port Fisik ({node.ports.length} Port):
-              </span>
-              <div className="space-y-1.5">
+            <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-slate-800 text-[11px] block uppercase">
+                    Daftar Port Fisik ({node.ports.length} Port)
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {node.ports.filter((p) => p.connectedCableId).length} terpakai, {node.ports.filter((p) => !p.connectedCableId).length} tersedia
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowAddPortDropdown(!showAddPortDropdown)}
+                  className="flex items-center gap-1 px-2 py-1 bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 rounded text-[10.5px] font-bold transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>Tambah Port</span>
+                </button>
+              </div>
+
+              {/* Add Port Dropdown / Selector */}
+              {showAddPortDropdown && (
+                <div className="p-2 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5 animate-in fade-in duration-100">
+                  <span className="text-[10px] font-bold text-slate-700 block">Pilih Tipe Media Port Baru:</span>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[
+                      { medium: 'ethernet' as const, label: 'LAN (RJ45)' },
+                      { medium: 'fiber' as const, label: 'Optik (SC)' },
+                      { medium: 'wireless' as const, label: 'Wi-Fi' },
+                      { medium: 'coaxial' as const, label: 'Coaxial' },
+                    ].map((m) => (
+                      <button
+                        key={m.medium}
+                        onClick={() => handleAddPort(m.medium)}
+                        className="py-1 px-1.5 text-[10px] font-semibold bg-white hover:bg-sky-50 hover:text-sky-800 hover:border-sky-300 rounded border border-slate-200 transition-colors text-center"
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
                 {node.ports.map((port) => {
-                  // `port.status` is the administrative/link-negotiation state
-                  // ("up"/"down") and says nothing about whether a cable is
-                  // physically plugged in -- `connectedCableId` is the only
-                  // field that records that. A port could be status "up" with
-                  // no cable at all, or "down" while a cable sits in it, and
-                  // this table used to collapse both onto one green/grey dot,
-                  // so there was no way to tell an empty port from a live one
-                  // at a glance. Two independent indicators now: which cable
-                  // (if any) occupies the port, and its up/down state.
                   const plugCable = port.connectedCableId
                     ? allCables.find((c) => c.id === port.connectedCableId)
                     : undefined;
@@ -1861,10 +3153,10 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                         />
                         <div className="min-w-0">
                           <span className="font-semibold text-slate-800 block truncate">{port.name}</span>
-                          <span className={`block text-[10px] truncate ${isPlugged ? 'text-sky-700' : 'text-amber-600'}`}>
+                          <span className={`block text-[10px] truncate ${isPlugged ? 'text-sky-700 font-medium' : 'text-slate-500'}`}>
                             {isPlugged
                               ? `Terpasang Kabel -> ${peerNode?.name || 'Perangkat Lain'}`
-                              : 'Port Kosong (Belum Ada Kabel)'}
+                              : 'Port Kosong (Siap Dihubungkan)'}
                           </span>
                         </div>
                       </div>
@@ -1872,8 +3164,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                         <span
                           className={`font-mono text-[10px] uppercase px-1.5 py-0.5 rounded border ${
                             isPlugged
-                              ? 'text-sky-700 bg-sky-50 border-sky-200'
-                              : 'text-amber-700 bg-amber-50 border-amber-200'
+                              ? 'text-sky-700 bg-sky-50 border-sky-200 font-semibold'
+                              : 'text-emerald-700 bg-emerald-50 border-emerald-200'
                           }`}
                         >
                           {isPlugged ? 'Terisi' : 'Kosong'}
@@ -1881,6 +3173,34 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                         <span className="font-mono text-[10px] uppercase text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
                           {port.medium}
                         </span>
+                        {isPlugged && onSelectCable && plugCable && (
+                          <button
+                            onClick={() => onSelectCable(plugCable.id)}
+                            title="Pilih & buka pengaturan kabel ini"
+                            className="px-2 py-0.5 text-[9.5px] font-bold text-sky-700 hover:text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded transition-colors flex items-center gap-1"
+                          >
+                            <Cable className="h-3 w-3" />
+                            <span>Pilih Kabel</span>
+                          </button>
+                        )}
+                        {isPlugged && onDisconnectCable && plugCable && (
+                          <button
+                            onClick={() => onDisconnectCable(plugCable.id)}
+                            title="Cabut kabel dari port ini"
+                            className="px-1.5 py-0.5 text-[9.5px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors"
+                          >
+                            Cabut
+                          </button>
+                        )}
+                        {!isPlugged && node.ports.length > 1 && (
+                          <button
+                            onClick={() => handleRemovePort(port.id)}
+                            title="Hapus port kosong ini"
+                            className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
