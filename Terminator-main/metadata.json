@@ -1,0 +1,6 @@
+{
+  "name": "Terminator - Terminal Network Simulator",
+  "description": "Simulator topologi jaringan interaktif untuk FTTH, MikroTik, Switch, Router, IoT, dan diagnostik redaman kabel optik serta pemecah masalah otomatis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
