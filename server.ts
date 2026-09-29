@@ -1,5 +1,4 @@
 import express from 'express';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
@@ -18,21 +17,6 @@ async function startServer() {
   app.get('/api/ai/status', statusHandler);
   app.post('/api/ai/chat', chatHandler);
   app.post('/api/ai/diagnose', diagnoseHandler);
-
-  // Direct ZIP download endpoint for GitHub export
-  app.get(['/api/download-zip', '/terminator-network-simulator.zip'], (_req, res) => {
-    const zipPath = path.join(__dirname, 'terminator-network-simulator.zip');
-    const publicZip = path.join(__dirname, 'public', 'terminator-network-simulator.zip');
-    const targetFile = fs.existsSync(zipPath) ? zipPath : fs.existsSync(publicZip) ? publicZip : null;
-
-    if (targetFile) {
-      res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', 'attachment; filename="terminator-network-simulator.zip"');
-      res.sendFile(targetFile);
-    } else {
-      res.status(404).send('File terminator-network-simulator.zip belum tersedia.');
-    }
-  });
 
   // Mount Vite middleware in development or serve static files in production
   const isProd = process.env.NODE_ENV === 'production';

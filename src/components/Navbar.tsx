@@ -14,7 +14,6 @@ import {
   Upload,
   Sparkles,
   Bot,
-  FolderArchive,
 } from 'lucide-react';
 import type { DiagnosticIssue, ActiveTool } from '../types/network';
 import { checkAiStatus, type AiStatusInfo } from '../utils/aiService';
@@ -247,17 +246,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Simpan Gambar</span>
           </button>
 
-          {/* DOWNLOAD PROJECT ZIP FOR GITHUB */}
-          <a
-            href="/api/download-zip"
-            download="terminator-network-simulator.zip"
-            className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shadow-2xs whitespace-nowrap"
-            title="Download full project source code (.ZIP) siap di-push ke GitHub"
-          >
-            <FolderArchive className="h-3.5 w-3.5 text-emerald-400" />
-            <span>Unduh ZIP</span>
-          </a>
-
           {/* RUN / SIMULATION TOGGLE */}
           <button
             onClick={onToggleRun}
@@ -318,14 +306,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Download className="h-3.5 w-3.5" />
           </button>
-          <a
-            href="/api/download-zip"
-            download="terminator-network-simulator.zip"
-            className="flex items-center justify-center rounded-lg border border-slate-700 bg-slate-900 p-1.5 text-white active:bg-slate-800 transition-colors shadow-2xs"
-            title="Download ZIP project (.ZIP)"
-          >
-            <FolderArchive className="h-3.5 w-3.5 text-emerald-400" />
-          </a>
         </div>
 
         {/* Row 2: Reset, Simpan Gambar, RUN */}

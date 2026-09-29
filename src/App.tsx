@@ -29,7 +29,7 @@ import { allocateStaticHost, gatewayAddressOf, primaryGateway } from './utils/ip
 import { zoomIn, zoomOut } from './utils/zoom';
 import type { HistoryState } from './utils/historyCore';
 import { canRedo as stackCanRedo, canUndo as stackCanUndo, createHistory, isSameSnapshot, pushSnapshot, redo as stackRedo, undo as stackUndo } from './utils/historyCore';
-import { toPng } from 'html-to-image';
+import { toBlob } from 'html-to-image';
 
 // Templates are module-level singletons. Seeding state with them directly
 // would alias the same node/cable objects, so any in-place mutation (e.g.
@@ -503,6 +503,19 @@ export default function App() {
               bandwidthLimitMbps: 50,
             }
           : undefined,
+      // Plain (unmanaged) switch. Previously this was left undefined and
+      // only ever created the first time someone toggled STP in the
+      // inspector, so a freshly-added switch's config panel showed a
+      // fallback value that wasn't actually saved on the node yet.
+      switchConfig:
+        type === 'switch'
+          ? {
+              brand: defaultBrand || 'TP-Link',
+              model: defaultModel || 'TL-SG108',
+              isManaged: false,
+              stpEnabled: true,
+            }
+          : undefined,
     };
 
     setNodes((prev) => [...prev, newNode]);
@@ -685,52 +698,112 @@ export default function App() {
     setTerminalNodeId(plan.sourceNodeId);
   };
 
-  // Reset or clear canvas
+  // Reset: kosongkan kanvas sepenuhnya (tanpa template)
   const handleReset = () => {
-    if (confirm('Apakah Anda ingin mengembalikan topologi ke template awal FTTH GPON?')) {
-      const fresh = cloneTemplate(TOPOLOGY_TEMPLATES[0]);
-      setNodes(fresh.nodes);
-      setCables(fresh.cables);
+    if (confirm('Kosongkan kanvas? Semua perangkat dan kabel akan dihapus (bisa dibatalkan dengan Undo).')) {
+      setNodes([]);
+      setCables([]);
       setSelectedNodeId(null);
       setSelectedCableId(null);
       setProbedNodeId(null);
-      showToast('Topologi di-reset ke template awal.');
+      setConnectingSourceNodeId(null);
+      setPingSourceNodeId(null);
+      showToast('Kanvas dikosongkan.');
       requestAnimationFrame(() => canvasRef.current?.fitView());
     }
   };
 
-  // Save Topology as High-Resolution PNG Image
+  // Simpan seluruh topologi sebagai PNG.
+  //
+  // Sebelumnya gambar diambil langsung dari kanvas yang tampil di layar, jadi
+  // perangkat di luar viewport terpotong dan hasilnya ikut level zoom (zoom
+  // kecil = teks kecil = buram). Sekarang kanvas di-clone ke wadah di luar
+  // layar seukuran seluruh isi topologi pada zoom 100%, lalu dirender dengan
+  // pixelRatio tinggi.
   const handleSaveTopologyImage = async () => {
     const canvasEl = document.getElementById('network-canvas-container');
     if (!canvasEl) {
       showToast('Kanvas topologi tidak ditemukan.');
       return;
     }
+    const liveNodesLayer = canvasEl.querySelector<HTMLElement>('[data-export-layer="nodes"]');
+    if (!liveNodesLayer || liveNodesLayer.children.length === 0) {
+      showToast('Kanvas masih kosong, tidak ada yang bisa disimpan.');
+      return;
+    }
+
+    // Batas seluruh node dari ukuran aslinya (offset* tidak terpengaruh zoom/pan).
+    const PAD = 60;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    Array.from(liveNodesLayer.children).forEach((c) => {
+      const el = c as HTMLElement;
+      minX = Math.min(minX, el.offsetLeft);
+      minY = Math.min(minY, el.offsetTop);
+      maxX = Math.max(maxX, el.offsetLeft + el.offsetWidth);
+      maxY = Math.max(maxY, el.offsetTop + el.offsetHeight);
+    });
+    const width = Math.ceil(maxX - minX + PAD * 2);
+    const height = Math.ceil(maxY - minY + PAD * 2);
+    const offX = PAD - minX;
+    const offY = PAD - minY;
+
+    // Clone kanvas -> wadah di luar layar dengan ukuran penuh, zoom 100%.
+    const host = document.createElement('div');
+    host.style.cssText = `position:fixed;left:-100000px;top:0;width:${width}px;height:${height}px;pointer-events:none;`;
+    const clone = canvasEl.cloneNode(true) as HTMLElement;
+    clone.removeAttribute('id');
+    clone.style.width = `${width}px`;
+    clone.style.height = `${height}px`;
+    clone.style.flex = 'none';
+    clone.style.backgroundImage = 'none';
+    clone.style.backgroundColor = '#f8fafc';
+    clone.querySelectorAll('.export-exclude').forEach((el) => el.remove());
+    const svgG = clone.querySelector('[data-export-layer="svg"]');
+    if (svgG) svgG.setAttribute('transform', `translate(${offX}, ${offY}) scale(1)`);
+    const nodesLayer = clone.querySelector<HTMLElement>('[data-export-layer="nodes"]');
+    if (nodesLayer) {
+      nodesLayer.style.transform = `translate(${offX}px, ${offY}px) scale(1)`;
+    }
+    host.appendChild(clone);
+    document.body.appendChild(host);
 
     try {
       showToast('Sedang membuat gambar topologi (PNG)...');
-      const dataUrl = await toPng(canvasEl, {
-        backgroundColor: '#f8fafc',
-        pixelRatio: 2, // 2x crisp HD resolution
-        cacheBust: true,
-        filter: (node) => {
-          const el = node as HTMLElement;
-          if (el?.classList?.contains('export-exclude')) return false;
-          return true;
-        },
-      });
+      await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
 
+      // Setajam mungkin tetapi tetap di bawah batas canvas browser
+      // (sisi terpanjang <= 8192px, luas <= ~16 juta piksel agar aman di iOS/Android).
+      const ratio = Math.max(
+        1,
+        Math.min(4, 8192 / Math.max(width, height), Math.sqrt(16_000_000 / (width * height))),
+      );
+
+      const blob = await toBlob(clone, {
+        backgroundColor: '#f8fafc',
+        pixelRatio: ratio,
+        width,
+        height,
+        cacheBust: true,
+      });
+      if (!blob) throw new Error('toBlob returned null');
+
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const now = new Date();
       const dateStr = now.toISOString().slice(0, 10);
       const timeStr = `${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}`;
       a.download = `topologi-jaringan-${dateStr}_${timeStr}.png`;
-      a.href = dataUrl;
+      a.href = url;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
       showToast('✓ Gambar topologi berhasil diunduh (PNG)!');
     } catch (err) {
       console.error('Save image failed:', err);
       showToast('Gagal membuat gambar topologi. Silakan coba lagi.');
+    } finally {
+      host.remove();
     }
   };
 
@@ -784,7 +857,7 @@ export default function App() {
         zoomLevel={zoomLevel}
         onZoomIn={() => setZoomLevel(zoomIn)}
         onZoomOut={() => setZoomLevel(zoomOut)}
-        onResetZoom={() => setZoomLevel(1.0)}
+        onResetZoom={() => canvasRef.current?.fitView()}
         connectingSourceNodeName={connectingSourceNode?.name}
         onCancelConnection={() => setConnectingSourceNodeId(null)}
         pingSourceNodeName={pingSourceNode?.name}

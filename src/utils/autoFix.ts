@@ -53,7 +53,57 @@ function freeHostOn(gateway: NetworkNode | null, nodes: readonly NetworkNode[]):
 
 type FixHandler = (issue: DiagnosticIssue, nodes: NetworkNode[], cables: CableConnection[]) => AutoFixResult | null;
 
+// Rough "who is upstream" ranking for the vlan-mismatch handler below: when
+// two directly-wired Access-mode ports disagree on VLAN ID, the more
+// infrastructure-like side (switch/router/gateway) is treated as authoritative
+// and the client-ish side is the one that gets moved onto it. Ties (e.g. two
+// plain clients) fall back to leaving `fromNode` alone and moving `toNode`,
+// mirroring how the diagnostic itself is anchored on `fromNode`.
+const VLAN_AUTHORITY_RANK: Partial<Record<NetworkNode['type'], number>> = {
+  mikrotik: 3,
+  switch_managed: 3,
+  router: 3,
+  switch: 2,
+  olt: 2,
+  ont: 2,
+};
+
 const handlers: Array<{ prefix: string; run: FixHandler }> = [
+  // Check 12-A: two directly-wired Access-mode ports tagged with different
+  // VLAN IDs. Bring the lower-authority side onto the other's VLAN, the same
+  // move the issue's own `solution` text already recommends ("Samakan VLAN
+  // ID pada kedua perangkat").
+  {
+    prefix: 'vlan-mismatch-',
+    run: (issue, nodes, cables) => {
+      if (!issue.targetCableId) return null;
+      const cable = cables.find((c) => c.id === issue.targetCableId);
+      if (!cable) return null;
+      const fromNode = nodes.find((n) => n.id === cable.fromNodeId);
+      const toNode = nodes.find((n) => n.id === cable.toNodeId);
+      if (!fromNode?.vlanConfig?.enabled || !toNode?.vlanConfig?.enabled) return null;
+      if (fromNode.vlanConfig.mode !== 'access' || toNode.vlanConfig.mode !== 'access') return null;
+      if (fromNode.vlanConfig.vlanId === toNode.vlanConfig.vlanId) return null;
+
+      const fromRank = VLAN_AUTHORITY_RANK[fromNode.type] ?? 0;
+      const toRank = VLAN_AUTHORITY_RANK[toNode.type] ?? 0;
+      // Higher rank keeps its VLAN; on a tie, `toNode` is the one that moves.
+      const [authority, follower] = fromRank >= toRank ? [fromNode, toNode] : [toNode, fromNode];
+
+      return {
+        nodes: replaceNode(nodes, follower.id, (n) => ({
+          ...n,
+          vlanConfig: {
+            ...n.vlanConfig!,
+            vlanId: authority.vlanConfig!.vlanId,
+            vlanName: authority.vlanConfig!.vlanName,
+          },
+        })),
+        cables,
+        summary: `${follower.name} disamakan ke VLAN ${authority.vlanConfig!.vlanId} (${authority.vlanConfig!.vlanName || 'mengikuti ' + authority.name}).`,
+      };
+    },
+  },
   // Check 1: powered-off device.
   {
     prefix: 'power-',

@@ -311,8 +311,11 @@ function mount(initialTag) {
     /useState<CableConnection\[\]>\(initial\.cables\)/.test(src) &&
     /createHistory\(\{ nodes: initial\.nodes, cables: initial\.cables \}\)/.test(src));
 
-  // A reset is a genuine edit, so it must not be routed through the memo.
-  ok('App.tsx: handleReset tetap membuat clone baru', /const fresh = cloneTemplate\(TOPOLOGY_TEMPLATES\[0\]\)/.test(src));
+  // A reset is a genuine edit, so it must not be routed through the memo --
+  // it has to hand setNodes/setCables a fresh array identity of its own
+  // (here: empty canvas literals) rather than reusing `nodes`/`cables`.
+  ok('App.tsx: handleReset mengosongkan kanvas dengan identitas array baru',
+    /const handleReset = \(\) => \{[\s\S]*?setNodes\(\[\]\);[\s\S]*?setCables\(\[\]\);[\s\S]*?\};/.test(src));
 
   ok('App.tsx: pushSnapshot dijaga isSameSnapshot',
     /isSameSnapshot\(h, \{ nodes, cables \}\) \? h : pushSnapshot\(h, \{ nodes, cables \}\)/.test(src));

@@ -38,7 +38,10 @@ const CATEGORY_TABS: Array<{ id: DeviceCategory; label: string }> = [
 
 export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice }) => {
   const [activeTab, setActiveTab] = useState<DeviceCategory>('ftth');
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Tertutup secara default di tampilan mobile (< md / 768px); di desktop selalu terbuka.
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+  );
   const [hoveredDevice, setHoveredDevice] = useState<NodeType | null>(null);
 
   const getDeviceIcon = (type: NodeType) => {
@@ -125,8 +128,9 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice }) => 
         </button>
       </div>
 
-      {!isCollapsed && (
-        <div className="flex flex-col p-2.5 space-y-2">
+      {/* Di desktop (md+) konten selalu tampil; di mobile mengikuti isCollapsed */}
+      {(
+        <div className={`${isCollapsed ? 'hidden md:flex' : 'flex'} flex-col p-2.5 space-y-2`}>
           {/* Category Tabs (Segmented Control) */}
           <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-lg">
             {CATEGORY_TABS.map((tab) => (

@@ -586,7 +586,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
         </defs>
 
         {/* Transformed Group synchronized with Pan & Zoom */}
-        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoomLevel})`}>
+        <g data-export-layer="svg" transform={`translate(${pan.x}, ${pan.y}) scale(${zoomLevel})`}>
           {/* Render Cable Lines */}
           {cables.map((cable) => {
             const fromNode = nodes.find((n) => n.id === cable.fromNodeId);
@@ -789,6 +789,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
 
       {/* Nodes HTML Layer */}
       <div
+        data-export-layer="nodes"
         className="absolute inset-0 pointer-events-none z-20"
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoomLevel})`,

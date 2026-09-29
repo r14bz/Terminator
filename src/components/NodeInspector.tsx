@@ -1890,13 +1890,23 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </div>
             )}
 
-            {/* REAL PASSIVE OPTICAL SPLITTER CONFIGURATION */}
-            {node.type === 'splitter' && (
+            {/* REAL PASSIVE OPTICAL SPLITTER CONFIGURATION
+                Shared by 'splitter', 'odc' and 'odp': all three are passive
+                PLC splitters (handleAddDevice gives every one of them the
+                same opticalConfig.splitterRatio/attenuationDb shape), just
+                at different stages of the PON tree. This used to only match
+                node.type === 'splitter', so opening an ODC or ODP showed no
+                configuration panel at all even though they carry the same
+                fields -- exactly the "empty config" gap. */}
+            {['splitter', 'odc', 'odp'].includes(node.type) && (
               <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-3.5 space-y-3.5">
                 <div className="flex items-center justify-between border-b border-rose-200 pb-2">
                   <div className="font-bold text-rose-950 text-xs flex items-center gap-1.5">
                     <Share2 className="h-4 w-4 text-rose-600" />
-                    <span>Optical PLC Splitter ({node.opticalConfig?.splitterRatio || '1:8'})</span>
+                    <span>
+                      {node.type === 'odc' ? 'Splitter Tahap 1 - ODC' : node.type === 'odp' ? 'Splitter Tahap 2 - ODP' : 'Optical PLC Splitter'}
+                      {' '}({node.opticalConfig?.splitterRatio || '1:8'})
+                    </span>
                   </div>
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800">
                     Redaman: ~{SPLITTER_LOSS_MAP[node.opticalConfig?.splitterRatio || '1:8'] || 10.5} dB
@@ -1912,30 +1922,55 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     {(['1:2', '1:4', '1:8', '1:16', '1:32'] as const).map((ratio) => {
                       const isCurrent = (node.opticalConfig?.splitterRatio || '1:8') === ratio;
                       const loss = SPLITTER_LOSS_MAP[ratio];
+                      // ODC/ODP keep their own port naming (Feeder IN / Dist IN,
+                      // Dist N (Out) / Port Drop N) instead of the generic
+                      // Input/Out N used by a standalone splitter, so
+                      // regenerating ports for those two doesn't relabel them
+                      // into names that don't match their real-world role.
+                      const inputLabel =
+                        node.type === 'odc' ? 'Feeder IN' : node.type === 'odp' ? 'Dist IN' : 'Input';
+                      const outputLabel = (i: number) =>
+                        node.type === 'odc'
+                          ? `Dist ${i} (Out)`
+                          : node.type === 'odp'
+                          ? `Port Drop ${i}`
+                          : `Out ${i}`;
                       return (
                         <button
                           key={ratio}
                           onClick={() => {
                             const numOutputs = parseInt(ratio.split(':')[1], 10);
-                            const existingInputPort = node.ports.find((p) => p.name === 'Input');
-                            const inputPort = existingInputPort || {
-                              id: `p-${node.id}-input`,
-                              name: 'Input',
-                              medium: 'fiber' as const,
-                              status: 'up' as const,
-                            };
+                            // The input is always whatever port is first in
+                            // this device's port list, regardless of its
+                            // current label.
+                            const existingInputPort = node.ports[0];
+                            const inputPort = existingInputPort
+                              ? { ...existingInputPort, name: inputLabel }
+                              : {
+                                  id: `p-${node.id}-input`,
+                                  name: inputLabel,
+                                  medium: 'fiber' as const,
+                                  status: 'up' as const,
+                                };
 
                             const newPorts: typeof node.ports = [inputPort];
                             for (let i = 1; i <= numOutputs; i++) {
-                              const portName = `Out ${i}`;
-                              const existing = node.ports.find((p) => p.name === portName);
+                              const portName = outputLabel(i);
+                              // Match existing output ports positionally (index i
+                              // among the non-input ports), not by name: the
+                              // label changes with the device type/ratio, but
+                              // the underlying port -- and any cable plugged
+                              // into it -- should carry over.
+                              const existing = node.ports[i];
                               newPorts.push(
-                                existing || {
-                                  id: `p-${node.id}-out-${i}`,
-                                  name: portName,
-                                  medium: 'fiber' as const,
-                                  status: 'up' as const,
-                                }
+                                existing
+                                  ? { ...existing, name: portName }
+                                  : {
+                                      id: `p-${node.id}-out-${i}`,
+                                      name: portName,
+                                      medium: 'fiber' as const,
+                                      status: 'up' as const,
+                                    }
                               );
                             }
 
@@ -2366,8 +2401,14 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </div>
             )}
 
-            {/* REAL IEEE 802.1Q VLAN TAGGING CONFIGURATION */}
-            {['switch', 'mikrotik', 'ont', 'olt', 'pc', 'cctv', 'server', 'router'].includes(node.type) && (
+            {/* REAL IEEE 802.1Q VLAN TAGGING CONFIGURATION
+                'switch_managed' was missing from this list even though a
+                manageable switch is the primary real-world device for VLAN
+                trunking (it is the "trunk neighbour" the vlan-trunk-drop
+                check and its auto-fix already reason about) -- without it,
+                a managed switch could never actually be put into Trunk mode
+                from this panel. */}
+            {['switch', 'switch_managed', 'mikrotik', 'ont', 'olt', 'pc', 'cctv', 'server', 'router'].includes(node.type) && (
               <div className="rounded-xl border border-indigo-200 bg-indigo-50/30 p-3.5 space-y-3 shadow-2xs">
                 <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
                   <div className="font-bold text-indigo-950 text-xs flex items-center gap-1.5">
@@ -2407,7 +2448,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                           enabled: e.target.checked,
                           vlanId: node.vlanConfig?.vlanId || (node.type === 'cctv' ? 100 : node.type === 'ont' ? 1049 : 10),
                           vlanName: node.vlanConfig?.vlanName || (node.type === 'cctv' ? 'VLAN 100 - CCTV' : node.type === 'ont' ? 'VLAN 1049 - Internet' : 'VLAN 10 - Manajemen'),
-                          mode: node.vlanConfig?.mode || (['switch', 'mikrotik'].includes(node.type) ? 'trunk' : 'access'),
+                          mode: node.vlanConfig?.mode || (['switch', 'switch_managed', 'mikrotik'].includes(node.type) ? 'trunk' : 'access'),
                           allowedVlans: node.vlanConfig?.allowedVlans || [10, 20, 50, 100, 1049],
                           priorityCos: node.vlanConfig?.priorityCos ?? 0,
                           nativeVlan: node.vlanConfig?.nativeVlan || 1,

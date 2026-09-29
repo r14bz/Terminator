@@ -228,7 +228,7 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
         <button
           onClick={onResetZoom}
           className="p-1 rounded hover:bg-slate-100 hover:text-slate-900 transition-colors"
-          title="Kembalikan Tampilan Normal (100%)"
+          title="Pas ke layar (tampilkan semua perangkat)"
         >
           <Maximize2 className="h-3.5 w-3.5" />
         </button>
