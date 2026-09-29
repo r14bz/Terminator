@@ -140,7 +140,7 @@ export const TOPOLOGY_TEMPLATES: TopologyTemplate[] = [
           { id: 'p-pc-nic', name: 'NIC RJ45', medium: 'ethernet', status: 'up' },
         ],
         ipConfig: {
-          mode: 'static',
+          mode: 'dhcp',
           ip: '192.168.1.100',
           subnet: '255.255.255.0',
           gateway: '192.168.1.1',
@@ -286,7 +286,7 @@ export const TOPOLOGY_TEMPLATES: TopologyTemplate[] = [
         poweredOn: true,
         status: 'online',
         ports: [{ id: 'p-pc-nic', name: 'NIC RJ45', medium: 'ethernet', status: 'up' }],
-        ipConfig: { mode: 'static', ip: '192.168.88.10', subnet: '255.255.255.0', gateway: '192.168.88.1', dns: '192.168.88.1' },
+        ipConfig: { mode: 'dhcp', ip: '192.168.88.10', subnet: '255.255.255.0', gateway: '192.168.88.1', dns: '192.168.88.1' },
       },
       {
         id: 'mk-ap',
@@ -313,7 +313,7 @@ export const TOPOLOGY_TEMPLATES: TopologyTemplate[] = [
         poweredOn: true,
         status: 'online',
         ports: [{ id: 'p-cctv-lan', name: 'PoE RJ45 Port', medium: 'ethernet', status: 'up' }],
-        ipConfig: { mode: 'static', ip: '192.168.88.50', subnet: '255.255.255.0', gateway: '192.168.88.1', dns: '192.168.88.1' },
+        ipConfig: { mode: 'dhcp', ip: '192.168.88.50', subnet: '255.255.255.0', gateway: '192.168.88.1', dns: '192.168.88.1' },
       },
       {
         id: 'mk-phone',

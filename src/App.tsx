@@ -23,7 +23,22 @@ import { runNetworkDiagnostics } from './utils/diagnosticEngine';
 import { applyAutoFix, isAutoFixable } from './utils/autoFix';
 import { planPing } from './utils/pingTool';
 import { findFreeSlot } from './utils/nodePlacement';
-import { mediumForCable, reconcilePorts, synthesisePort } from './utils/portReconcile';
+import {
+  mediumForCable,
+  reconcilePorts,
+  synthesisePort,
+  findFreePort,
+  claimCable,
+  releaseCables,
+  portCapacity,
+  cablesOnPort,
+} from './utils/portReconcile';
+import { DHCP_CLIENT_TYPES, autoAssignDhcpLeases } from './utils/dhcpAuto';
+
+// Total slot koneksi dan yang terpakai untuk sekumpulan port. Radio Wi-Fi AP
+// menghitung 32 slot, port RJ45/fiber menghitung 1 per port.
+const slotTotal = (ports: readonly DevicePort[]) => ports.reduce((n, p) => n + portCapacity(p), 0);
+const slotUsed = (ports: readonly DevicePort[]) => ports.reduce((n, p) => n + cablesOnPort(p).length, 0);
 import { validateCableConnection, getMediumDisplayName } from './utils/cableCompatibility';
 import { allocateStaticHost, gatewayAddressOf, primaryGateway } from './utils/ipAlloc';
 import { zoomIn, zoomOut } from './utils/zoom';
@@ -64,6 +79,15 @@ export default function App() {
   const [cables, setCables] = useState<CableConnection[]>(initial.cables);
 
   const canvasRef = useRef<CanvasHandle>(null);
+
+  // DHCP otomatis: setiap kali topologi berubah, klien DHCP langsung mendapat
+  // (atau kehilangan) alamat dari gateway yang terhubung, tanpa perlu klik
+  // Static lalu DHCP di Inspector. Mengembalikan array yang sama bila tidak
+  // ada perubahan, sehingga efek ini berhenti sendiri.
+  useEffect(() => {
+    const next = autoAssignDhcpLeases(nodes, cables);
+    if (next !== nodes) setNodes(next as NetworkNode[]);
+  }, [nodes, cables]);
 
   // ---- Undo / Redo history -------------------------------------------
   // Implemented as a debounced snapshot of {nodes, cables}: any change is
@@ -313,7 +337,9 @@ export default function App() {
         id: `p-${newId}-${idx}`,
         name: p.name,
         medium: p.medium,
-        status: 'up',
+        status: 'up' as const,
+        // Radio Wi-Fi AP melayani banyak klien (sampai 32), bukan satu.
+        ...(p.maxConnections ? { maxConnections: p.maxConnections } : {}),
       })),
       opticalConfig:
         type === 'olt'
@@ -444,12 +470,14 @@ export default function App() {
       ipConfig:
         ['pc', 'laptop', 'printer', 'voip_phone', 'cctv', 'smartphone', 'iot', 'server', 'router', 'mesh', 'ap_ptp', 'switch_managed', 'access_point', 'firewall', 'nas'].includes(type)
           ? {
-              mode: 'static',
+              // Perangkat ujung otomatis menjadi DHCP client; alamatnya diisi
+              // oleh autoAssignDhcpLeases begitu kabel tersambung ke gateway.
+              mode: DHCP_CLIENT_TYPES.includes(type) ? ('dhcp' as const) : ('static' as const),
               // `null` means the pool is exhausted. Left as a constant .100 it
               // would collide with whatever already sits there, which is the
               // exact conflict this allocator exists to avoid. An empty address
               // is honest, and Check 6 reports it.
-              ip: lanAddress ?? '',
+              ip: DHCP_CLIENT_TYPES.includes(type) ? '' : (lanAddress ?? ''),
               subnet: lanSubnet,
               gateway: lanGatewayIp ?? '192.168.1.1',
               dns: '8.8.8.8',
@@ -567,20 +595,20 @@ export default function App() {
     const requiredMedium: PortMedium = mediumForCable(cableType);
 
     // Strict port availability enforcement: check if both nodes have an available port
-    const fromFreePort = fromNode.ports.find((p) => p.medium === requiredMedium && !p.connectedCableId);
+    const fromFreePort = findFreePort(fromNode.ports, requiredMedium);
     if (!fromFreePort) {
       const fromMediumPorts = fromNode.ports.filter((p) => p.medium === requiredMedium);
       showToast(
-        `Port Penuh: Semua ${fromMediumPorts.length} port ${getMediumDisplayName(requiredMedium)} pada "${fromNode.name}" sudah terisi penuh (${fromMediumPorts.length}/${fromMediumPorts.length} terpakai). Cabut kabel yang ada atau tambahkan port baru di Node Inspector.`
+        `Port Penuh: Semua ${slotTotal(fromMediumPorts)} slot ${getMediumDisplayName(requiredMedium)} pada "${fromNode.name}" sudah terisi penuh (${slotUsed(fromMediumPorts)}/${slotTotal(fromMediumPorts)} terpakai). Cabut kabel yang ada atau tambahkan port baru di Node Inspector.`
       );
       return;
     }
 
-    const toFreePort = toNode.ports.find((p) => p.medium === requiredMedium && !p.connectedCableId);
+    const toFreePort = findFreePort(toNode.ports, requiredMedium);
     if (!toFreePort) {
       const toMediumPorts = toNode.ports.filter((p) => p.medium === requiredMedium);
       showToast(
-        `Port Penuh: Semua ${toMediumPorts.length} port ${getMediumDisplayName(requiredMedium)} pada "${toNode.name}" sudah terisi penuh (${toMediumPorts.length}/${toMediumPorts.length} terpakai). Cabut kabel yang ada atau tambahkan port baru di Node Inspector.`
+        `Port Penuh: Semua ${slotTotal(toMediumPorts)} slot ${getMediumDisplayName(requiredMedium)} pada "${toNode.name}" sudah terisi penuh (${slotUsed(toMediumPorts)}/${slotTotal(toMediumPorts)} terpakai). Cabut kabel yang ada atau tambahkan port baru di Node Inspector.`
       );
       return;
     }
@@ -616,8 +644,8 @@ export default function App() {
     const attachPort = (node: NetworkNode, port: typeof fromPort) => {
       const exists = node.ports.some((p) => p.id === port.id);
       const ports = exists
-        ? node.ports.map((p) => (p.id === port.id ? { ...p, connectedCableId: newCable.id } : p))
-        : [...node.ports, { ...port, connectedCableId: newCable.id }];
+        ? node.ports.map((p) => (p.id === port.id ? claimCable(p, newCable.id) : p))
+        : [...node.ports, claimCable(port, newCable.id)];
       return { ...node, ports };
     };
 
@@ -633,14 +661,10 @@ export default function App() {
   // Release every port back-reference held by the given cables.
   const releasePortsOf = (prev: NetworkNode[], cableIds: Set<string>) =>
     prev.map((n) => {
-      if (!n.ports.some((p) => p.connectedCableId && cableIds.has(p.connectedCableId))) return n;
+      if (!n.ports.some((p) => cablesOnPort(p).some((id) => cableIds.has(id)))) return n;
       return {
         ...n,
-        ports: n.ports.map((p) =>
-          p.connectedCableId && cableIds.has(p.connectedCableId)
-            ? { ...p, connectedCableId: undefined }
-            : p
-        ),
+        ports: n.ports.map((p) => releaseCables(p, cableIds)),
       };
     });
 

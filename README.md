@@ -2,6 +2,8 @@
 
 Aplikasi web interaktif simulator topologi jaringan modern (mirip Cisco Packet Tracer) yang dirancang khusus untuk memodelkan jaringan **FTTH (Fiber to the Home)**, **Carrier Metro Ethernet**, **MikroTik RouterOS**, **Switching**, dan **Perangkat Klien & IoT**.
 
+**Demo online:** https://t3rm1n4t0r.vercel.app/
+
 Dilengkapi dengan kalkulator redaman kabel optik riil (**Optical Power Budget & OPM Probe**), diagnostik otomatis & panduan pemecahan masalah untuk teknisi pemula, serta antarmuka tema terang (*light theme*) yang ramah perangkat seluler (*mobile-friendly*).
 
 ---
@@ -19,7 +21,9 @@ Dilengkapi dengan kalkulator redaman kabel optik riil (**Optical Power Budget & 
    - Kabel Optik Drop Core (1-2 core dengan messenger wire, ~0.40 dB/km)
    - Kabel LAN UTP (Cat5e / Cat6 RJ45, max 100m)
    - Kabel Coaxial (RG6 / BNC)
-   - Sinyal Nirkabel / Wi-Fi (2.4GHz & 5GHz)
+   - Sinyal Nirkabel / Wi-Fi (2.4GHz & 5GHz): satu radio ONT / Router / Mesh / Access Point melayani hingga **32 perangkat** sekaligus, sedangkan adapter Wi-Fi klien tetap satu koneksi.
+
+   **DHCP otomatis**: PC, Laptop, Printer, IP Phone, CCTV, Smartphone, dan IoT otomatis menjadi DHCP client. Begitu kabel (LAN atau Wi-Fi) tersambung ke ONT / MikroTik / Router dengan DHCP Server aktif, IP, subnet, dan gateway langsung terisi tanpa perlu klik apa pun. Jika DHCP Server dimatikan atau ONT dalam Mode Bridge, klien kembali tanpa IP (APIPA). IP statis tetap bisa dipilih manual di Node Inspector.
 
 3. **Mesin Simulasi Real-Time (Tombol RUN)**:
    - Animasi aliran paket data dan pulsa cahaya optik antar kabel.
@@ -57,8 +61,11 @@ Dilengkapi dengan kalkulator redaman kabel optik riil (**Optical Power Budget & 
 
 ## 🛠️ Panduan Menjalankan Secara Lokal (Local Development)
 
-1. **Ekstrak File ZIP**:
-   Ekstrak file `terminator-network-simulator.zip` ke folder proyek Anda.
+1. **Clone Repositori**:
+   ```bash
+   git clone https://github.com/r14bz/Terminator.git
+   cd Terminator
+   ```
 
 2. **Install Dependensi**:
    ```bash
@@ -89,19 +96,20 @@ Dilengkapi dengan kalkulator redaman kabel optik riil (**Optical Power Budget & 
    ```
    Buka browser di `http://localhost:3000`.
 
+5. **Jalankan Pengujian (opsional)**:
+   ```bash
+   npm test
+   ```
+
 ---
 
 ## 📦 Panduan Push ke GitHub
 
-1. **Inisialisasi Git dan Push**:
+1. **Commit dan Push**:
    ```bash
-   # Masuk ke direktori proyek yang sudah diekstrak
-   git init
    git add .
-   git commit -m "feat: Terminator Network Simulator with OpenRouter & FTTH Engine"
-   git branch -M main
-   git remote add origin https://github.com/USERNAME/REPO_NAME.git
-   git push -u origin main
+   git commit -m "feat: Wi-Fi 32 klien dan DHCP otomatis"
+   git push origin main
    ```
    *(Catatan: File `.env` yang berisi private API key Anda secara otomatis diabaikan oleh `.gitignore` sehingga aman dari kebocoran ke publik).*
 

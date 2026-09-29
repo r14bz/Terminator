@@ -39,6 +39,7 @@ import type { NetworkNode, CableConnection, PortMedium } from '../types/network'
 import { DEVICE_METADATA } from '../data/deviceDefinitions';
 import { DEVICE_BRANDS } from '../data/deviceBrands';
 import type { OpticalCalculationResult } from '../utils/opticalCalculator';
+import { cablesOnPort, portCapacity } from '../utils/portReconcile';
 import { SPLITTER_LOSS_MAP } from '../utils/opticalCalculator';
 import { findUpstreamGateway, isSameSubnet, isValidIpv4, checkInternetAccess } from '../utils/ipUtils';
 import { allocateDhcpLease, allocateStaticHost, lanDefaultsFor } from '../utils/ipAlloc';
@@ -122,7 +123,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
     node.type === 'ont'
       ? allNodes.filter(
           (n) =>
-            ['pc', 'cctv', 'smartphone', 'iot', 'server'].includes(n.type) &&
+            ['pc', 'laptop', 'printer', 'voip_phone', 'cctv', 'smartphone', 'iot', 'server'].includes(n.type) &&
             findUpstreamGateway(n, allNodes, allCables)?.id === node.id
         )
       : [];
@@ -2165,7 +2166,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             )}
 
             {/* Standard IP Address settings (PC, Router, Server, CCTV, Smartphone, IoT) */}
-            {['pc', 'server', 'router', 'cctv', 'smartphone', 'iot'].includes(node.type) && (
+            {['pc', 'laptop', 'printer', 'voip_phone', 'server', 'router', 'cctv', 'smartphone', 'iot'].includes(node.type) && (
               <div className="space-y-2.5 rounded-xl border border-slate-200 p-3 bg-white">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
@@ -3134,7 +3135,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     Daftar Port Fisik ({node.ports.length} Port)
                   </span>
                   <span className="text-[10px] text-slate-500">
-                    {node.ports.filter((p) => p.connectedCableId).length} terpakai, {node.ports.filter((p) => !p.connectedCableId).length} tersedia
+                    {node.ports.reduce((n, p) => n + cablesOnPort(p).length, 0)} terpakai, {node.ports.reduce((n, p) => n + (portCapacity(p) - cablesOnPort(p).length), 0)} tersedia
                   </span>
                 </div>
                 <button
@@ -3171,14 +3172,17 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
               <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
                 {node.ports.map((port) => {
-                  const plugCable = port.connectedCableId
-                    ? allCables.find((c) => c.id === port.connectedCableId)
-                    : undefined;
-                  const isPlugged = !!plugCable;
-                  const peerId = plugCable
-                    ? (plugCable.fromNodeId === node.id ? plugCable.toNodeId : plugCable.fromNodeId)
-                    : undefined;
-                  const peerNode = peerId ? allNodes.find((n) => n.id === peerId) : undefined;
+                  const plugCables = cablesOnPort(port)
+                    .map((id) => allCables.find((c) => c.id === id))
+                    .filter((c): c is CableConnection => Boolean(c));
+                  const plugCable = plugCables[0];
+                  const isPlugged = plugCables.length > 0;
+                  const isSharedPort = portCapacity(port) > 1;
+                  const peerNames = plugCables.map((c) => {
+                    const id = c.fromNodeId === node.id ? c.toNodeId : c.fromNodeId;
+                    return allNodes.find((n) => n.id === id)?.name || 'Perangkat Lain';
+                  });
+                  const peerNode = peerNames.length > 0 ? { name: peerNames[0] } : undefined;
 
                   return (
                     <div
@@ -3195,7 +3199,11 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                         <div className="min-w-0">
                           <span className="font-semibold text-slate-800 block truncate">{port.name}</span>
                           <span className={`block text-[10px] truncate ${isPlugged ? 'text-sky-700 font-medium' : 'text-slate-500'}`}>
-                            {isPlugged
+                            {isSharedPort
+                              ? isPlugged
+                                ? `${plugCables.length}/${portCapacity(port)} klien: ${peerNames.slice(0, 3).join(', ')}${peerNames.length > 3 ? ` +${peerNames.length - 3} lagi` : ''}`
+                                : `Radio Wi-Fi, siap melayani sampai ${portCapacity(port)} klien`
+                              : isPlugged
                               ? `Terpasang Kabel -> ${peerNode?.name || 'Perangkat Lain'}`
                               : 'Port Kosong (Siap Dihubungkan)'}
                           </span>
@@ -3209,12 +3217,12 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                               : 'text-emerald-700 bg-emerald-50 border-emerald-200'
                           }`}
                         >
-                          {isPlugged ? 'Terisi' : 'Kosong'}
+                          {isSharedPort ? `${plugCables.length}/${portCapacity(port)}` : isPlugged ? 'Terisi' : 'Kosong'}
                         </span>
                         <span className="font-mono text-[10px] uppercase text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">
                           {port.medium}
                         </span>
-                        {isPlugged && onSelectCable && plugCable && (
+                        {isPlugged && !isSharedPort && onSelectCable && plugCable && (
                           <button
                             onClick={() => onSelectCable(plugCable.id)}
                             title="Pilih & buka pengaturan kabel ini"
@@ -3224,7 +3232,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                             <span>Pilih Kabel</span>
                           </button>
                         )}
-                        {isPlugged && onDisconnectCable && plugCable && (
+                        {isPlugged && !isSharedPort && onDisconnectCable && plugCable && (
                           <button
                             onClick={() => onDisconnectCable(plugCable.id)}
                             title="Cabut kabel dari port ini"

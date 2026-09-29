@@ -174,7 +174,7 @@ export const DEVICE_METADATA: Record<NodeType, DeviceMetadata> = {
       { name: 'LAN 2 (FE)', medium: 'ethernet' },
       { name: 'LAN 3 (FE)', medium: 'ethernet' },
       { name: 'LAN 4 (FE)', medium: 'ethernet' },
-      { name: 'WLAN 2.4G', medium: 'wireless' },
+      { name: 'WLAN 2.4G', medium: 'wireless', maxConnections: 32 },
     ],
     color: '#0284c7', // Sky
   },
@@ -285,7 +285,7 @@ export const DEVICE_METADATA: Record<NodeType, DeviceMetadata> = {
       { name: 'LAN 2', medium: 'ethernet' },
       { name: 'LAN 3', medium: 'ethernet' },
       { name: 'LAN 4', medium: 'ethernet' },
-      { name: 'Wi-Fi 2.4G/5G', medium: 'wireless' },
+      { name: 'Wi-Fi 2.4G/5G', medium: 'wireless', maxConnections: 32 },
     ],
     color: '#0891b2', // Cyan
   },
@@ -322,7 +322,7 @@ export const DEVICE_METADATA: Record<NodeType, DeviceMetadata> = {
     defaultPorts: [
       { name: 'WAN/LAN 1', medium: 'ethernet' },
       { name: 'LAN 2', medium: 'ethernet' },
-      { name: 'Wireless Mesh', medium: 'wireless' },
+      { name: 'Wireless Mesh', medium: 'wireless', maxConnections: 32 },
     ],
     color: '#10b981', // Emerald light
   },
@@ -429,7 +429,7 @@ export const DEVICE_METADATA: Record<NodeType, DeviceMetadata> = {
     ],
     defaultPorts: [
       { name: 'Gigabit PoE LAN', medium: 'ethernet' },
-      { name: 'Wi-Fi 2.4G & 5G Radio', medium: 'wireless' },
+      { name: 'Wi-Fi 2.4G & 5G Radio', medium: 'wireless', maxConnections: 32 },
     ],
     color: '#0284c7', // Sky
   },

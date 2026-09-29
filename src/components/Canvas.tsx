@@ -817,9 +817,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
 
           const cableReqMedium = mediumForCable(selectedCableType);
           const isMediumCompatible = nodeSupportsMedium(node, cableReqMedium);
-          const mediumPorts = node.ports.filter((p) => p.medium === cableReqMedium);
-          const freeMediumPorts = mediumPorts.filter((p) => !p.connectedCableId);
-          const isPortFull = isMediumCompatible && mediumPorts.length > 0 && freeMediumPorts.length === 0;
 
           return (
             <div
@@ -834,8 +831,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
               title={
                 activeTool === 'cable' && !isMediumCompatible
                   ? `${node.name}: Perangkat ini tidak memiliki port fisik untuk ${CABLE_METADATA[selectedCableType]?.name || selectedCableType}`
-                  : activeTool === 'cable' && isPortFull
-                  ? `${node.name}: Semua port ${CABLE_METADATA[selectedCableType]?.name || selectedCableType} sudah terisi penuh (${mediumPorts.length}/${mediumPorts.length})`
                   : undefined
               }
               className={`absolute pointer-events-auto w-[132px] rounded-xl bg-white border p-2.5 transition-shadow select-none shadow-xs ${
@@ -847,8 +842,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
                   ? 'border-purple-500 ring-4 ring-purple-300 animate-pulse'
                   : activeTool === 'cable' && !isMediumCompatible
                   ? 'opacity-60 border-slate-200 bg-slate-50/90'
-                  : activeTool === 'cable' && isPortFull
-                  ? 'border-amber-400 bg-amber-50/40 ring-1 ring-amber-300'
                   : activeTool === 'cable' && isMediumCompatible && !connectingSourceNodeId
                   ? 'border-sky-300 ring-1 ring-sky-200 hover:ring-2 hover:ring-sky-400'
                   : isSelected
@@ -872,13 +865,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
               {activeTool === 'cable' && !isMediumCompatible && (
                 <div className="flex items-center justify-center gap-1 rounded bg-slate-100 py-0.5 mb-1 text-[8.5px] font-semibold text-slate-500">
                   <span>Port Tidak Cocok</span>
-                </div>
-              )}
-
-              {/* Port Full Indicator if in 'cable' mode */}
-              {activeTool === 'cable' && isPortFull && (
-                <div className="flex items-center justify-center gap-1 rounded bg-amber-100 py-0.5 mb-1 text-[8.5px] font-bold text-amber-800 border border-amber-300">
-                  <span>Port Penuh ({mediumPorts.length}/{mediumPorts.length})</span>
                 </div>
               )}
 

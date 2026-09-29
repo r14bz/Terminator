@@ -47,7 +47,16 @@ export interface DevicePort {
   id: string;
   name: string;
   medium: PortMedium;
+  /** Kabel pertama yang terpasang di port ini (kompatibel dengan kode lama). */
   connectedCableId?: string;
+  /**
+   * Semua kabel yang terpasang. Hanya dipakai port bersama (radio Wi-Fi AP)
+   * yang `maxConnections`-nya lebih dari 1. Port biasa cukup memakai
+   * `connectedCableId`.
+   */
+  connectedCableIds?: string[];
+  /** Jumlah koneksi maksimum. Kosong = 1 (port fisik biasa). Radio Wi-Fi AP = 32. */
+  maxConnections?: number;
   status: 'up' | 'down';
   vlanId?: number;
   speedMbps?: number;
@@ -262,7 +271,7 @@ export interface DeviceMetadata {
   fullDescription: string;
   technicianRole: string;       // Fungsi nyata di lapangan
   technicianTips: string[];     // Tips & Trik Teknisi
-  defaultPorts: Array<{ name: string; medium: PortMedium }>;
+  defaultPorts: Array<{ name: string; medium: PortMedium; maxConnections?: number }>;
   color: string;
   standardOpticalLoss?: string; // dB range
 }

@@ -1,7 +1,7 @@
 {
-  "name": "react-example",
+  "name": "terminator",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "npm run test:ip && npm run test:optical && npm run test:ping && npm run test:history && npm run test:history-wiring && npm run test:placement && npm run test:zoom && npm run test:internet-map && npm run test:internet-access && npm run test:ports && npm run test:ipalloc && npm run test:autofix && npm run test:compatibility && npm run test:bridge && npm run test:ai-service",
+    "test": "npm run test:ip && npm run test:optical && npm run test:ping && npm run test:history && npm run test:history-wiring && npm run test:placement && npm run test:zoom && npm run test:internet-map && npm run test:internet-access && npm run test:ports && npm run test:ipalloc && npm run test:autofix && npm run test:compatibility && npm run test:bridge && npm run test:ai-service && npm run test:dhcp-auto",
+    "test:dhcp-auto": "node --import ./scripts/ts-resolve.mjs scripts/verify-dhcp-auto.mjs",
     "test:ai-service": "node --import ./scripts/ts-resolve.mjs scripts/verify-ai-service.mjs",
     "test:bridge": "node --import ./scripts/ts-resolve.mjs scripts/verify-ont-bridge-htb.mjs",
     "test:compatibility": "node --import ./scripts/ts-resolve.mjs scripts/verify-cable-compatibility.mjs",
