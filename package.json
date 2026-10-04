@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "npm run test:ip && npm run test:optical && npm run test:ping && npm run test:history && npm run test:history-wiring && npm run test:placement && npm run test:zoom && npm run test:internet-map && npm run test:internet-access && npm run test:ports && npm run test:ipalloc && npm run test:autofix && npm run test:compatibility && npm run test:bridge && npm run test:ai-service && npm run test:dhcp-auto",
+    "test": "npm run test:ip && npm run test:optical && npm run test:ping && npm run test:history && npm run test:history-wiring && npm run test:placement && npm run test:zoom && npm run test:internet-map && npm run test:internet-access && npm run test:ports && npm run test:ipalloc && npm run test:autofix && npm run test:compatibility && npm run test:bridge && npm run test:ai-service && npm run test:dhcp-auto && npm run test:topology-rules",
     "test:dhcp-auto": "node --import ./scripts/ts-resolve.mjs scripts/verify-dhcp-auto.mjs",
     "test:ai-service": "node --import ./scripts/ts-resolve.mjs scripts/verify-ai-service.mjs",
     "test:bridge": "node --import ./scripts/ts-resolve.mjs scripts/verify-ont-bridge-htb.mjs",
@@ -31,7 +31,8 @@
     "test:mutation:ipalloc": "bash scripts/mutate-ipalloc.sh",
     "test:zoom": "node --import ./scripts/ts-resolve.mjs scripts/verify-zoom.mjs",
     "test:internet-map": "node --import ./scripts/ts-resolve.mjs scripts/verify-internet-map.mjs",
-    "test:internet-access": "node --import ./scripts/ts-resolve.mjs scripts/verify-internet-access.mjs"
+    "test:internet-access": "node --import ./scripts/ts-resolve.mjs scripts/verify-internet-access.mjs",
+    "test:topology-rules": "node --import tsx scripts/verify-topology-rules.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
