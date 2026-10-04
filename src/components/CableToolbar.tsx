@@ -33,7 +33,7 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
   onCancelPing,
 }) => {
   return (
-    <div className={`cable-toolbar ${activeTool === 'cable' ? 'cable-mode-active' : ''} flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 text-xs shadow-2xs">
+    <div className={'cable-toolbar ' + (activeTool === 'cable' ? 'cable-mode-active ' : '') + 'flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 text-xs shadow-2xs'}>
       {/* Primary Tool Modes */}
       <div className="cable-toolbar-tools flex items-center gap-1 overflow-x-auto">
         {/* Tool 1: Pilih / Inspeksi */}
