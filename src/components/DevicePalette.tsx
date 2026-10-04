@@ -61,7 +61,7 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice, isOpe
     <aside
       className={`
         md:relative md:flex md:flex-col md:w-72 md:shrink-0 md:border-r md:border-slate-200 md:bg-white md:shadow-xs md:z-20
-        fixed inset-x-3 bottom-[92px] z-[55] max-h-[calc(100dvh-190px)] overflow-hidden rounded-2xl border border-slate-200 bg-white/98 shadow-2xl backdrop-blur-md
+        fixed inset-x-3 bottom-[92px] z-[55] flex-col max-h-[calc(100dvh-190px)] overflow-hidden rounded-2xl border border-slate-200 bg-white/98 shadow-2xl backdrop-blur-md
         transition-all duration-200
         ${isOpen ? 'flex' : 'hidden md:flex'}
       `}

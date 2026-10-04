@@ -1,1 +1,123 @@
 @import "tailwindcss";
+
+/* --------------------------------------------------------------------------
+   Terminator theme system
+   -------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+}
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+html[data-theme='dark'] body {
+  background: #0b1120 !important;
+  color: #e5edf7 !important;
+}
+
+/* Common Tailwind surfaces used throughout the simulator.  Keeping these
+   overrides here makes the theme global, including existing drawers/modals,
+   without changing the network simulation data or node colours. */
+html[data-theme='dark'] .bg-white,
+html[data-theme='dark'] .bg-white\/95,
+html[data-theme='dark'] .bg-white\/90,
+html[data-theme='dark'] .bg-white\/80 {
+  background-color: #111827 !important;
+}
+
+html[data-theme='dark'] .bg-slate-50,
+html[data-theme='dark'] .bg-slate-50\/95,
+html[data-theme='dark'] .bg-slate-100 {
+  background-color: #172033 !important;
+}
+
+html[data-theme='dark'] .bg-slate-200 {
+  background-color: #263246 !important;
+}
+
+html[data-theme='dark'] .text-slate-900,
+html[data-theme='dark'] .text-slate-800,
+html[data-theme='dark'] .text-slate-700 {
+  color: #e5edf7 !important;
+}
+
+html[data-theme='dark'] .text-slate-600,
+html[data-theme='dark'] .text-slate-500,
+html[data-theme='dark'] .text-slate-400 {
+  color: #9eacc0 !important;
+}
+
+html[data-theme='dark'] .border-slate-200,
+html[data-theme='dark'] .border-slate-300 {
+  border-color: #334155 !important;
+}
+
+html[data-theme='dark'] .hover\:bg-slate-50:hover,
+html[data-theme='dark'] .hover\:bg-slate-100:hover {
+  background-color: #1e293b !important;
+}
+
+html[data-theme='dark'] .hover\:text-slate-900:hover {
+  color: #ffffff !important;
+}
+
+/* Inputs / selects / text areas */
+html[data-theme='dark'] input:not([type='file']),
+html[data-theme='dark'] textarea,
+html[data-theme='dark'] select {
+  background-color: #0f172a !important;
+  color: #e5edf7 !important;
+  border-color: #475569 !important;
+}
+
+html[data-theme='dark'] input::placeholder,
+html[data-theme='dark'] textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Common cards and panels */
+html[data-theme='dark'] .shadow-2xs,
+html[data-theme='dark'] .shadow-sm,
+html[data-theme='dark'] .shadow-md,
+html[data-theme='dark'] .shadow-lg,
+html[data-theme='dark'] .shadow-xl {
+  --tw-shadow-color: rgba(0, 0, 0, .35) !important;
+}
+
+/* The canvas remains light enough to keep topology nodes readable. */
+html[data-theme='dark'] .canvas-surface,
+html[data-theme='dark'] [data-canvas-surface] {
+  background-color: #0b1220 !important;
+}
+
+/* Theme toggle itself needs a stable surface in both modes. */
+html[data-theme='dark'] .dark-theme-control {
+  background-color: #172033 !important;
+  border-color: #475569 !important;
+  color: #e5edf7 !important;
+}
+
+html[data-theme='dark'] .dark-theme-control:hover {
+  background-color: #243047 !important;
+}
+
+/* Preserve status colours while making their pale backgrounds dark-friendly. */
+html[data-theme='dark'] .bg-emerald-50 { background-color: #052e24 !important; }
+html[data-theme='dark'] .bg-amber-50 { background-color: #3b2a05 !important; }
+html[data-theme='dark'] .bg-rose-50 { background-color: #3b1118 !important; }
+html[data-theme='dark'] .bg-sky-50 { background-color: #082f49 !important; }
+html[data-theme='dark'] .bg-purple-50 { background-color: #2e1065 !important; }
+html[data-theme='dark'] .bg-indigo-50 { background-color: #1e1b4b !important; }
+
+html[data-theme='dark'] .border-emerald-200 { border-color: #166534 !important; }
+html[data-theme='dark'] .border-amber-200 { border-color: #92400e !important; }
+html[data-theme='dark'] .border-rose-200 { border-color: #9f1239 !important; }
+html[data-theme='dark'] .border-sky-200 { border-color: #0369a1 !important; }
+html[data-theme='dark'] .border-purple-200 { border-color: #7e22ce !important; }
+
+/* Native browser controls and dialogs inherit the selected theme. */
+html[data-theme='dark'] button,
+html[data-theme='dark'] [role='button'] {
+  color-scheme: dark;
+}

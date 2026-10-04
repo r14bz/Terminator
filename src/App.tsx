@@ -63,6 +63,20 @@ const cloneTemplate = (t: TopologyTemplate) => {
 };
 
 export default function App() {
+  // Tema UI: tersimpan di perangkat agar mode terakhir tetap digunakan.
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light';
+    const saved = window.localStorage.getItem('terminator-theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem('terminator-theme', theme);
+  }, [theme]);
+
   // Initial default: FTTH GPON Standard template.
   //
   // One clone, shared between the live state and the initial history snapshot.
@@ -863,6 +877,8 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         isRunning={isRunning}
+        theme={theme}
+        onToggleTheme={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
         onToggleRun={() => setIsRunning(!isRunning)}
         onReset={handleReset}
         issues={issues}

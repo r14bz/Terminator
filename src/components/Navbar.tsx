@@ -14,6 +14,8 @@ import {
   Upload,
   Sparkles,
   Bot,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import type { DiagnosticIssue, ActiveTool } from '../types/network';
 import { checkAiStatus, type AiStatusInfo } from '../utils/aiService';
@@ -36,6 +38,8 @@ interface NavbarProps {
   onRedo: () => void;
   onExportJson: () => void;
   onImportJson: (data: any) => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -54,6 +58,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRedo,
   onExportJson,
   onImportJson,
+  theme,
+  onToggleTheme,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [aiStatus, setAiStatus] = useState<AiStatusInfo | null>(null);
@@ -202,6 +208,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                   : 'Gemini'}
               </span>
             )}
+          </button>
+
+          {/* Theme toggle: tetap ringkas di mobile, lengkap di desktop. */}
+          <button
+            onClick={onToggleTheme}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-slate-900 transition-colors dark-theme-control"
+            title={theme === 'dark' ? 'Mode terang' : 'Mode gelap'}
+            aria-label={theme === 'dark' ? 'Aktifkan mode terang' : 'Aktifkan mode gelap'}
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-500" /> : <Moon className="h-4 w-4 text-slate-600" />}
+            <span className="hidden lg:inline">{theme === 'dark' ? 'Terang' : 'Gelap'}</span>
           </button>
 
           {/* PWA install button: always visible on mobile next to AI. */}
