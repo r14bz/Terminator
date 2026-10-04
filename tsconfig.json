@@ -5,7 +5,6 @@
     "useDefineForClassFields": false,
     "module": "ESNext",
     "types": [
-      "vite/client",
       "node"
     ],
     "lib": [
