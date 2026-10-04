@@ -4,6 +4,9 @@
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "module": "ESNext",
+    "types": [
+      "node"
+    ],
     "lib": [
       "ES2022",
       "DOM",

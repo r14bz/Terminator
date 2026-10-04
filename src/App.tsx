@@ -12,6 +12,7 @@ import { OPMFloatingTool } from './components/OPMFloatingTool';
 import { GlossaryModal } from './components/GlossaryModal';
 import { TemplateModal } from './components/TemplateModal';
 import { NetworkAIChatModal } from './components/NetworkAIChatModal';
+import { BottomDock } from './components/BottomDock';
 
 import type { NetworkNode, CableConnection, NodeCableType, NodeType, ActiveTool, DevicePort, PortMedium, DiagnosticIssue } from './types/network';
 import type { TopologyTemplate } from './data/templates';
@@ -45,7 +46,6 @@ import { zoomIn, zoomOut } from './utils/zoom';
 import type { HistoryState } from './utils/historyCore';
 import { canRedo as stackCanRedo, canUndo as stackCanUndo, createHistory, isSameSnapshot, pushSnapshot, redo as stackRedo, undo as stackUndo } from './utils/historyCore';
 import { toBlob } from 'html-to-image';
-import { Plus, Undo2, Camera, Download, Upload, RotateCcw, Play, Pause, ChevronUp } from 'lucide-react';
 
 // Templates are module-level singletons. Seeding state with them directly
 // would alias the same node/cable objects, so any in-place mutation (e.g.
@@ -60,11 +60,6 @@ import { Plus, Undo2, Camera, Download, Upload, RotateCcw, Play, Pause, ChevronU
 const cloneTemplate = (t: TopologyTemplate) => {
   const cables = structuredClone(t.cables);
   return { nodes: reconcilePorts(structuredClone(t.nodes), cables), cables };
-};
-
-type BeforeInstallPromptEvent = Event & {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
 export default function App() {
@@ -190,46 +185,17 @@ export default function App() {
     requestAnimationFrame(() => canvasRef.current?.fitView());
   };
 
-  // PWA install prompt. Chrome/Android exposes this event when the app is
-  // installable; the button remains available on unsupported browsers and
-  // explains how to install manually.
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [mobileJsonMenuOpen, setMobileJsonMenuOpen] = useState(false);
-
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as BeforeInstallPromptEvent);
-    };
-    const handleInstalled = () => setInstallPrompt(null);
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    window.addEventListener('appinstalled', handleInstalled);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleInstalled);
-    };
-  }, []);
-
-  const handleInstallPwa = async () => {
-    if (installPrompt) {
-      await installPrompt.prompt();
-      await installPrompt.userChoice;
-      setInstallPrompt(null);
-      return;
-    }
-
-    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const message = isIos
-      ? 'Untuk memasang Terminator di iPhone/iPad: buka menu Bagikan, lalu pilih “Add to Home Screen”.'
-      : 'Jika browser mendukung PWA, buka menu browser lalu pilih “Install app” atau “Tambahkan ke layar utama”.';
-    showToast(message);
-  };
-
   const [isRunning, setIsRunning] = useState<boolean>(true);
   const [activeTool, setActiveTool] = useState<ActiveTool>('select');
+  const [isDevicePaletteOpen, setIsDevicePaletteOpen] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : false
+  );
   const [selectedCableType, setSelectedCableType] = useState<NodeCableType>('drop_core');
-  const [isMobilePaletteOpen, setIsMobilePaletteOpen] = useState(false);
+
+  const handleSetActiveTool = (tool: ActiveTool) => {
+    setActiveTool(tool);
+    setIsDevicePaletteOpen(false);
+  };
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedCableId, setSelectedCableId] = useState<string | null>(null);
@@ -906,21 +872,19 @@ export default function App() {
         onOpenAiChat={() => handleOpenAiChat()}
         onSaveImage={handleSaveTopologyImage}
         activeTool={activeTool}
-        setActiveTool={setActiveTool}
+        setActiveTool={handleSetActiveTool}
         canUndo={canUndo}
         canRedo={canRedo}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onExportJson={handleExportJson}
         onImportJson={handleImportJson}
-        onInstallPwa={handleInstallPwa}
-        canInstallPwa={Boolean(installPrompt)}
       />
 
       {/* Cable & Interactive Tool Controls */}
       <CableToolbar
         activeTool={activeTool}
-        setActiveTool={setActiveTool}
+        setActiveTool={handleSetActiveTool}
         selectedCableType={selectedCableType}
         setSelectedCableType={setSelectedCableType}
         zoomLevel={zoomLevel}
@@ -937,9 +901,9 @@ export default function App() {
       <div className="relative flex flex-1 flex-col md:flex-row overflow-hidden">
         {/* Device Library & Palette */}
         <DevicePalette
-          onAddDevice={(type) => { handleAddDevice(type); setIsMobilePaletteOpen(false); }}
-          mobileOpen={isMobilePaletteOpen}
-          onMobileToggle={() => setIsMobilePaletteOpen((open) => !open)}
+          onAddDevice={handleAddDevice}
+          isOpen={isDevicePaletteOpen}
+          onClose={() => setIsDevicePaletteOpen(false)}
         />
 
         {/* Interactive Network Topology Canvas */}
@@ -994,66 +958,6 @@ export default function App() {
         )}
       </div>
 
-      {/* Mobile quick actions: the canvas stays visible while secondary actions
-          live in a thumb-friendly bottom dock. */}
-      <div className="mobile-quick-dock md:hidden" aria-label="Kontrol cepat mobile">
-        <button onClick={() => setIsMobilePaletteOpen(true)} className="mobile-dock-btn mobile-dock-primary" title="Tambah perangkat">
-          <Plus /><span>Perangkat</span>
-        </button>
-        <button onClick={handleUndo} disabled={!canUndo} className="mobile-dock-btn" title="Urungkan">
-          <Undo2 /><span>Undo</span>
-        </button>
-        <button onClick={handleSaveTopologyImage} className="mobile-dock-btn" title="Simpan gambar">
-          <Camera /><span>Foto</span>
-        </button>
-        <div className="relative min-w-0">
-          {mobileJsonMenuOpen && (
-            <>
-              <button
-                type="button"
-                aria-label="Tutup menu JSON"
-                className="fixed inset-0 z-80 cursor-default"
-                onClick={() => setMobileJsonMenuOpen(false)}
-              />
-              <div className="mobile-json-menu absolute bottom-[58px] left-1/2 z-100 w-44 -translate-x-1/2 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                <button
-                  type="button"
-                  onClick={() => { setMobileJsonMenuOpen(false); document.querySelector<HTMLInputElement>('input[type="file"][accept=".json,application/json"]')?.click(); }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-sky-50 hover:text-sky-800"
-                >
-                  <Upload className="h-4 w-4 text-sky-600" />
-                  <span>Import JSON</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setMobileJsonMenuOpen(false); handleExportJson(); }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
-                >
-                  <Download className="h-4 w-4 text-emerald-600" />
-                  <span>Download JSON</span>
-                </button>
-              </div>
-            </>
-          )}
-          <button
-            onClick={() => setMobileJsonMenuOpen((open) => !open)}
-            className="mobile-dock-btn w-full"
-            title="Import atau download JSON"
-            aria-label="Menu JSON"
-            aria-expanded={mobileJsonMenuOpen}
-          >
-            <Download />
-            <span>JSON</span>
-          </button>
-        </div>
-        <button onClick={handleReset} className="mobile-dock-btn" title="Kosongkan kanvas">
-          <RotateCcw /><span>Reset</span>
-        </button>
-        <button onClick={() => setIsRunning((v) => !v)} className={`mobile-dock-btn mobile-dock-run ${isRunning ? 'running' : ''}`} title="Jalankan atau jeda simulasi">
-          {isRunning ? <Pause /> : <Play />}<span>{isRunning ? 'Jeda' : 'Run'}</span>
-        </button>
-      </div>
-
       {/* Floating Cable Inspector & Deletion tool */}
       {selectedCable && (
         <CableInspector
@@ -1074,9 +978,48 @@ export default function App() {
         />
       )}
 
+      <input
+        id="terminator-json-input"
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            try {
+              handleImportJson(JSON.parse(event.target?.result as string));
+            } catch {
+              showToast('File JSON tidak valid atau rusak.');
+            }
+          };
+          reader.readAsText(file);
+          e.target.value = '';
+        }}
+      />
+
+      <BottomDock
+        isRunning={isRunning}
+        onToggleRun={() => setIsRunning(!isRunning)}
+        onReset={handleReset}
+        onSaveImage={handleSaveTopologyImage}
+        canUndo={canUndo}
+        onUndo={handleUndo}
+        onImportJson={() => document.getElementById('terminator-json-input')?.click()}
+        onExportJson={handleExportJson}
+        isDevicePaletteOpen={isDevicePaletteOpen}
+        onToggleDevicePalette={() => {
+          setIsDevicePaletteOpen((open) => !open);
+          setActiveTool('select');
+          setConnectingSourceNodeId(null);
+          setPingSourceNodeId(null);
+        }}
+      />
+
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-slate-900/90 text-white px-4 py-2 text-xs font-medium shadow-lg backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
+        <div className="fixed bottom-[92px] left-1/2 -translate-x-1/2 z-[70] sm:bottom-5 rounded-xl bg-slate-900/90 text-white px-4 py-2 text-xs font-medium shadow-lg backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
           {toastMessage}
         </div>
       )}

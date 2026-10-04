@@ -1,5 +1,5 @@
 import React from 'react';
-import { MousePointer, Move, Hand, Cable, Activity, Send, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { MousePointer, Move, Hand, Cable, Activity, Send, ZoomIn, ZoomOut, ChevronDown } from 'lucide-react';
 import type { NodeCableType, ActiveTool } from '../types/network';
 import { CABLE_METADATA } from '../data/cableDefinitions';
 
@@ -18,6 +18,15 @@ interface CableToolbarProps {
   onCancelPing: () => void;
 }
 
+const TOOL_META: Record<ActiveTool, { label: string; description: string }> = {
+  select: { label: 'Pilih / Detail', description: 'Pilih perangkat atau kabel untuk melihat detail dan konfigurasi.' },
+  move: { label: 'Geser Node', description: 'Sentuh lalu tarik perangkat untuk memindahkannya di kanvas.' },
+  pan: { label: 'Geser Canvas', description: 'Geser area kosong untuk memindahkan tampilan kanvas.' },
+  cable: { label: 'Hubungkan Kabel', description: 'Pilih tipe kabel lalu klik node sumber dan node tujuan.' },
+  opm: { label: 'OPM / dBm', description: 'Klik perangkat optik untuk mengukur daya sinyal dalam dBm.' },
+  ping: { label: 'Ping Test', description: 'Klik perangkat asal lalu perangkat tujuan untuk menguji koneksi.' },
+};
+
 export const CableToolbar: React.FC<CableToolbarProps> = ({
   activeTool,
   setActiveTool,
@@ -32,200 +41,113 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
   pingSourceNodeName,
   onCancelPing,
 }) => {
+  const selectTool = (tool: ActiveTool) => {
+    setActiveTool(tool);
+    if (tool !== 'cable') onCancelConnection();
+    if (tool !== 'ping') onCancelPing();
+  };
+
   return (
-    <div className={'cable-toolbar ' + (activeTool === 'cable' ? 'cable-mode-active ' : '') + 'flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 text-xs shadow-2xs'}>
-      {/* Primary Tool Modes */}
-      <div className="cable-toolbar-tools flex items-center gap-1 overflow-x-auto">
-        {/* Tool 1: Pilih / Inspeksi */}
-        <button
-          onClick={() => {
-            setActiveTool('select');
-            onCancelConnection();
-            onCancelPing();
-          }}
-          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
-            (activeTool === 'select'
-              ? 'bg-slate-900 text-white shadow-2xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
-          title="Klik node atau kabel untuk melihat detail, konfigurasi, dan status"
-        >
-          <MousePointer className="h-3.5 w-3.5" />
-          <span>Pilih / Detail</span>
-        </button>
-
-        {/* Tool 2: Geser Node (DEDICATED BUTTON SEPARATED AS REQUESTED) */}
-        <button
-          onClick={() => {
-            setActiveTool('move');
-            onCancelConnection();
-            onCancelPing();
-          }}
-          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
-            (activeTool === 'move'
-              ? 'bg-indigo-600 text-white shadow-2xs ring-2 ring-indigo-300'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
-          title="Mode Khusus: Sentuh/tarik perangkat untuk memindahkan posisinya di kanvas"
-        >
-          <Move className="h-3.5 w-3.5" />
-          <span>Geser Node</span>
-        </button>
-
-        {/* Tool 3: Geser Kanvas (Pan) */}
-        <button
-          onClick={() => {
-            setActiveTool('pan');
-            onCancelConnection();
-            onCancelPing();
-          }}
-          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
-            (activeTool === 'pan'
-              ? 'bg-slate-700 text-white shadow-2xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
-          title="Geser area tampilan kanvas"
-        >
-          <Hand className="h-3.5 w-3.5" />
-          <span>Geser Kanvas</span>
-        </button>
-
-        {/* Tool 4: Hubungkan Kabel */}
-        <button
-          onClick={() => {
-            setActiveTool('cable');
-            onCancelPing();
-          }}
-          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
-            (activeTool === 'cable'
-              ? 'bg-sky-600 text-white shadow-2xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
-          title="Tarik kabel antar port perangkat"
-        >
-          <Cable className="h-3.5 w-3.5" />
-          <span>Hubungkan Kabel</span>
-        </button>
-
-        {/* Tool 5: OPM Probe */}
-        <button
-          onClick={() => {
-            setActiveTool('opm');
-            onCancelConnection();
-            onCancelPing();
-          }}
-          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
-            (activeTool === 'opm'
-              ? 'bg-emerald-600 text-white shadow-2xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
-          title="Optical Power Meter: Klik perangkat/kabel untuk cek daya optik (dBm)"
-        >
-          <Activity className="h-3.5 w-3.5" />
-          <span>OPM Probe (dBm)</span>
-        </button>
-
-        {/* Tool 6: Ping Packet Test */}
-        <button
-          onClick={() => {
-            setActiveTool('ping');
-            onCancelConnection();
-          }}
-          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
-            (activeTool === 'ping'
-              ? 'bg-purple-600 text-white shadow-2xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
-          title="Uji kirim paket ICMP Ping dari perangkat asal ke tujuan"
-        >
-          <Send className="h-3.5 w-3.5" />
-          <span>Ping Test</span>
-        </button>
-      </div>
-
-      {/* Cable Selector */}
-      <div className="cable-toolbar-cables flex items-center gap-1.5 overflow-x-auto py-0.5">
-        <span className="text-[11px] font-medium text-slate-500 hidden sm:inline">
-          Pilih jenis kabel
-        </span>
-        {(Object.keys(CABLE_METADATA) as NodeCableType[]).map((cableKey) => {
-          const meta = CABLE_METADATA[cableKey];
-          const isSelected = selectedCableType === cableKey && activeTool === 'cable';
-          return (
-            <button
-              key={cableKey}
-              onClick={() => {
-                setSelectedCableType(cableKey);
-                if (activeTool !== 'cable') {
-                  setActiveTool('cable');
-                  onCancelPing();
-                }
-              }}
-              className={'flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-all whitespace-nowrap border ' +
-                (isSelected
-                  ? 'border-sky-500 bg-sky-50 text-sky-900 font-semibold shadow-2xs'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50')}
-              title={meta.name + ': ' + meta.shortDesc + ' (Klik untuk hubungkan)'}
-            >
-              <span
-                className="h-2 w-2 rounded-full shrink-0"
-                style={{ backgroundColor: meta.colorHex }}
-              />
-              <span>{meta.name.split('(')[0]}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Status banner if connecting or pinging */}
-      {connectingSourceNodeName && (
-        <div className="flex items-center gap-2 rounded-md bg-sky-50 px-2.5 py-1 border border-sky-200 text-sky-800 text-xs">
-          <span>Menghubungkan dari: <strong>{connectingSourceNodeName}</strong>. Klik node target.</span>
-          <button
-            onClick={onCancelConnection}
-            className="text-sky-900 hover:underline font-bold text-[11px]"
-          >
-            Batal
+    <div className="relative">
+      <div className="relative z-35 flex items-center justify-between gap-1 border-b border-slate-200 bg-white px-2 py-2 shadow-2xs">
+        <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+          <button onClick={() => selectTool('select')} className={`shrink-0 rounded-xl p-2.5 transition-colors ${activeTool === 'select' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`} title="Pilih / Detail">
+            <MousePointer className="h-5 w-5" />
           </button>
+          <button onClick={() => selectTool('move')} className={`shrink-0 rounded-xl p-2.5 transition-colors ${activeTool === 'move' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`} title="Geser Node">
+            <Move className="h-5 w-5" />
+          </button>
+          <button onClick={() => selectTool('pan')} className={`shrink-0 rounded-xl p-2.5 transition-colors ${activeTool === 'pan' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`} title="Geser Canvas">
+            <Hand className="h-5 w-5" />
+          </button>
+          <button onClick={() => selectTool('cable')} className={`shrink-0 rounded-xl p-2.5 transition-colors ${activeTool === 'cable' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`} title="Hubungkan Kabel">
+            <Cable className="h-5 w-5" />
+          </button>
+          <button onClick={() => selectTool('opm')} className={`shrink-0 rounded-xl p-2.5 transition-colors ${activeTool === 'opm' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`} title="OPM / cek daya optik (dBm)">
+            <Activity className="h-5 w-5" />
+          </button>
+          <button onClick={() => selectTool('ping')} className={`shrink-0 rounded-xl p-2.5 transition-colors ${activeTool === 'ping' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`} title="Ping Test">
+            <Send className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-1.5 py-1">
+          <button onClick={onZoomOut} className="rounded-lg p-1.5 text-slate-600 hover:bg-white" title="Perkecil tampilan kanvas">
+            <ZoomOut className="h-4 w-4" />
+          </button>
+          <span className="min-w-9 text-center font-mono text-[11px] font-semibold text-slate-700">{Math.round(zoomLevel * 100)}%</span>
+          <button onClick={onZoomIn} className="rounded-lg p-1.5 text-slate-600 hover:bg-white" title="Perbesar tampilan kanvas">
+            <ZoomIn className="h-4 w-4" />
+          </button>
+          {/* Fullscreen/fit icon intentionally removed so Ping remains visible. */}
+        </div>
+      </div>
+
+      <div className="pointer-events-none absolute left-1/2 top-full z-30 -translate-x-1/2">
+        <div className="pointer-events-auto mt-3 flex max-w-[calc(100vw-32px)] items-center gap-2 rounded-full bg-slate-800 px-4 py-2 text-xs font-bold text-white shadow-lg">
+          {activeTool === 'select' && <MousePointer className="h-3.5 w-3.5" />}
+          {activeTool === 'move' && <Move className="h-3.5 w-3.5" />}
+          {activeTool === 'pan' && <Hand className="h-3.5 w-3.5" />}
+          {activeTool === 'cable' && <Cable className="h-3.5 w-3.5" />}
+          {activeTool === 'opm' && <Activity className="h-3.5 w-3.5" />}
+          {activeTool === 'ping' && <Send className="h-3.5 w-3.5" />}
+          <span className="truncate">{TOOL_META[activeTool].label}</span>
+        </div>
+      </div>
+
+      {(connectingSourceNodeName || pingSourceNodeName) && (
+        <div className="relative z-40 flex justify-center border-b border-slate-200 bg-white px-3 py-1.5 text-xs">
+          {connectingSourceNodeName && (
+            <div className="flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-sky-800">
+              Menghubungkan dari <strong>{connectingSourceNodeName}</strong>
+              <button onClick={onCancelConnection} className="font-bold underline">Batal</button>
+            </div>
+          )}
+          {pingSourceNodeName && (
+            <div className="flex items-center gap-2 rounded-full bg-purple-50 px-3 py-1 text-purple-800">
+              Ping asal <strong>{pingSourceNodeName}</strong>
+              <button onClick={onCancelPing} className="font-bold underline">Batal</button>
+            </div>
+          )}
         </div>
       )}
 
-      {pingSourceNodeName && (
-        <div className="flex items-center gap-2 rounded-md bg-purple-50 px-2.5 py-1 border border-purple-200 text-purple-800 text-xs">
-          <span>Ping asal: <strong>{pingSourceNodeName}</strong>. Klik node target.</span>
-          <button
-            onClick={onCancelPing}
-            className="text-purple-900 hover:underline font-bold text-[11px]"
-          >
-            Batal
-          </button>
+      {/* Mobile cable drawer: vertical bottom sheet, never a horizontal toolbar. */}
+      {activeTool === 'cable' && (
+        <div className="fixed inset-x-3 bottom-[92px] z-[55] max-h-[calc(100dvh-220px)] overflow-y-auto rounded-2xl border border-slate-200 bg-white/98 p-3 shadow-2xl backdrop-blur-md md:bottom-5 md:left-1/2 md:right-auto md:w-[520px] md:-translate-x-1/2">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Pilih jenis kabel</h3>
+              <p className="text-[10px] text-slate-500">Pilih satu sebelum memilih node sumber.</p>
+            </div>
+            <ChevronDown className="h-4 w-4 text-slate-400" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(CABLE_METADATA) as NodeCableType[]).map((cableKey) => {
+              const meta = CABLE_METADATA[cableKey];
+              const isSelected = selectedCableType === cableKey;
+              return (
+                <button
+                  key={cableKey}
+                  onClick={() => setSelectedCableType(cableKey)}
+                  className={`flex min-h-14 items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-all ${
+                    isSelected ? 'border-sky-500 bg-sky-50 text-sky-900 ring-1 ring-sky-300' : 'border-slate-200 bg-white text-slate-700 hover:border-sky-300 hover:bg-sky-50'
+                  }`}
+                  title={`${meta.name}: ${meta.shortDesc}`}
+                >
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: meta.colorHex }} />
+                  <span>{meta.name.split('(')[0]}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Zoom controls & 2-finger indicator */}
-      <div className="cable-toolbar-zoom flex items-center gap-1.5 text-slate-600">
-        <span className="hidden xl:inline text-[10px] text-slate-400">
-          (Cubit 2 jari untuk zoom)
-        </span>
-        <button
-          onClick={onZoomOut}
-          className="p-1 rounded hover:bg-slate-100 hover:text-slate-900 transition-colors"
-          title="Perkecil Tampilan Kanvas"
-        >
-          <ZoomOut className="h-4 w-4" />
-        </button>
-        <span className="font-mono text-[11px] font-semibold text-slate-700 min-w-10 text-center">
-          {Math.round(zoomLevel * 100)}%
-        </span>
-        <button
-          onClick={onZoomIn}
-          className="p-1 rounded hover:bg-slate-100 hover:text-slate-900 transition-colors"
-          title="Perbesar Tampilan Kanvas"
-        >
-          <ZoomIn className="h-4 w-4" />
-        </button>
-        <button
-          onClick={onResetZoom}
-          className="p-1 rounded hover:bg-slate-100 hover:text-slate-900 transition-colors"
-          title="Pas ke layar (tampilkan semua perangkat)"
-        >
-          <Maximize2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      {/* Desktop keeps cable choices close to the toolbar but still below it. */}
+      {activeTool !== 'cable' && (
+        <div className="hidden md:block" aria-hidden="true">{TOOL_META[activeTool].description}</div>
+      )}
     </div>
   );
 };

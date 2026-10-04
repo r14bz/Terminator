@@ -265,7 +265,7 @@ Ada yang bisa saya bantu dengan topologi Anda saat ini?`,
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-2 sm:p-4 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-2 sm:p-4 backdrop-blur-xs animate-in fade-in duration-150">
       <div
         className={`flex flex-col rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden transition-all duration-200 ${
           isMaximized

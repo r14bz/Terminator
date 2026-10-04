@@ -13,10 +13,6 @@ import {
   Zap,
   AlertCircle,
   Move,
-  MousePointer,
-  Hand,
-  Activity,
-  Send,
   Cable as Grid,
   Tag,
   Wifi,
@@ -554,61 +550,16 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
         touchAction: 'none', // Prevents browser from hijacking touch gestures
       }}
     >
-      {/* Active Tool Hint — always visible on mobile so icon-only controls remain understandable */}
-      {(() => {
-        const toolHints: Record<ActiveTool, { label: string; description: string; className: string; icon: React.ElementType }> = {
-          select: {
-            label: 'Pilih / Detail',
-            description: 'Ketuk perangkat atau kabel untuk melihat detail & konfigurasi.',
-            className: 'bg-slate-900 text-white',
-            icon: MousePointer,
-          },
-          move: {
-            label: 'Geser Node',
-            description: 'Sentuh lalu seret perangkat untuk memindahkan posisinya.',
-            className: 'bg-indigo-600 text-white',
-            icon: Move,
-          },
-          pan: {
-            label: 'Geser Canvas',
-            description: 'Sentuh dan geser area kosong untuk menggeser tampilan kanvas.',
-            className: 'bg-slate-700 text-white',
-            icon: Hand,
-          },
-          cable: {
-            label: 'Hubungkan Kabel',
-            description: 'Ketuk perangkat/port sumber lalu ketuk perangkat tujuan untuk membuat kabel.',
-            className: 'bg-sky-600 text-white',
-            icon: Grid,
-          },
-          opm: {
-            label: 'OPM / Ukur dBm',
-            description: 'Ketuk perangkat atau kabel optik untuk mengukur daya sinyal (dBm).',
-            className: 'bg-emerald-600 text-white',
-            icon: Activity,
-          },
-          ping: {
-            label: 'Ping Test',
-            description: 'Ketuk perangkat asal lalu perangkat tujuan untuk menguji koneksi.',
-            className: 'bg-purple-600 text-white',
-            icon: Send,
-          },
-        };
-        const hint = toolHints[activeTool];
-        const Icon = hint.icon;
-        return (
-          <div className={`export-exclude absolute top-2 left-1/2 -translate-x-1/2 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-2 rounded-full px-3 py-1.5 shadow-lg backdrop-blur-xs animate-in fade-in ${hint.className}`}>
-            <Icon className="h-3.5 w-3.5 shrink-0" />
-            <span className="min-w-0 truncate text-[11px] sm:text-xs">
-              <strong>{hint.label}</strong><span className="hidden sm:inline"> — {hint.description}</span>
-            </span>
-            <span className="sr-only">{hint.description}</span>
-          </div>
-        );
-      })()}
+      {/* Mode Indicator Banner */}
+      {activeTool === 'move' && (
+        <div className="export-exclude absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 rounded-full bg-indigo-600 text-white px-4 py-1.5 text-xs font-semibold shadow-md backdrop-blur-xs animate-in fade-in">
+          <Move className="h-3.5 w-3.5" />
+          <span>Mode Geser Node: Sentuh / seret perangkat untuk memindahkan</span>
+        </div>
+      )}
 
       {/* Grid Style Toggle Button */}
-      <div className="export-exclude absolute bottom-3 right-3 z-30 flex items-center gap-1 bg-white/90 px-2 py-1 rounded-lg border border-slate-200 shadow-2xs text-[10px] text-slate-600 backdrop-blur-xs">
+      <div className="export-exclude absolute bottom-24 right-3 z-30 flex items-center gap-1 md:bottom-3 bg-white/90 px-2 py-1 rounded-lg border border-slate-200 shadow-2xs text-[10px] text-slate-600 backdrop-blur-xs">
         <Grid className="h-3 w-3 text-slate-400" />
         <button
           onClick={() => setGridStyle(gridStyle === 'clean' ? 'subtle_lines' : 'clean')}

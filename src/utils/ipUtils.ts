@@ -123,16 +123,10 @@ export function findRouterConnectedToBridge(
     if (!currentNode) continue;
 
     if (currentId !== ontNode.id) {
-      // A router-mode ONT is also a Layer-3 gateway. This matters for the
-      // supported case where a bridge-mode ONT is connected through an HTB
-      // pair to the LAN of another ONT that is online and serving DHCP.
-      // Bridge-mode ONTs remain transparent and are handled below.
-      if (['mikrotik', 'router'].includes(currentNode.type) ||
-          (currentNode.type === 'ont' && currentNode.ontConfig?.wanMode !== 'bridge')) {
+      if (['mikrotik', 'router'].includes(currentNode.type)) {
         if (currentNode.poweredOn) {
           return currentNode;
         }
-        continue;
       }
       // Only traverse through Layer 1 / Layer 2 transparent bridge devices
       if (!['switch', 'switch_managed', 'ap_ptp', 'htb'].includes(currentNode.type)) {

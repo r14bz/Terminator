@@ -262,7 +262,7 @@ const TerminalSession: React.FC<TerminalSessionProps> = ({ node, nodes, pingTarg
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs animate-in fade-in duration-150">
       <div className="flex h-[75vh] w-full max-w-2xl flex-col rounded-2xl bg-slate-950 text-slate-100 shadow-2xl border border-slate-800 overflow-hidden font-mono">
         {/* Terminal Header */}
         <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900/90 px-4 py-2.5 text-xs">

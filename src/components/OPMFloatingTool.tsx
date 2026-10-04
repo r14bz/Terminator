@@ -24,7 +24,7 @@ export const OPMFloatingTool: React.FC<OPMFloatingToolProps> = ({
   const isFail = powerVal < -27.0;
 
   return (
-    <div className="opm-floating-tool fixed bottom-4 left-4 z-[80] w-80 rounded-2xl border-2 border-slate-700 bg-slate-900 p-4 text-white shadow-2xl animate-in slide-in-from-bottom duration-200">
+    <div className="fixed bottom-[92px] left-3 right-3 z-[45] w-auto sm:bottom-5 sm:left-4 sm:right-auto sm:w-80 rounded-2xl border-2 border-slate-700 bg-slate-900 p-4 text-white shadow-2xl animate-in slide-in-from-bottom duration-200">
       {/* Top Header of OPM Instrument */}
       <div className="flex items-center justify-between border-b border-slate-700 pb-2">
         <div className="flex items-center gap-2">
