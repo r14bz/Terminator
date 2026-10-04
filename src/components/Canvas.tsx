@@ -1,29 +1,13 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
 import {
-  Globe,
-  Radio,
-  Server,
-  Layers,
-  Box,
-  Share2,
-  Cpu,
-  Monitor,
-  Camera,
-  Smartphone,
-  Zap,
   AlertCircle,
   Move,
   Cable as Grid,
   Tag,
-  Wifi,
-  Shield,
-  HardDrive,
-  Laptop,
-  Printer,
-  Phone,
 } from 'lucide-react';
 import type { NetworkNode, CableConnection, NodeCableType, SimulationPacket, ActiveTool, DiagnosticIssue } from '../types/network';
 import type { OpticalCalculationResult } from '../utils/opticalCalculator';
+import { DeviceIcon } from './DeviceIcon';
 import { CABLE_METADATA } from '../data/cableDefinitions';
 import { nodeSupportsMedium } from '../utils/cableCompatibility';
 import { mediumForCable } from '../utils/portReconcile';
@@ -487,37 +471,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
     });
   };
 
-  const getNodeIcon = (type: string) => {
-    switch (type) {
-      case 'internet': return <Globe className="h-5 w-5 text-sky-600" />;
-      case 'metro': return <Radio className="h-5 w-5 text-indigo-600" />;
-      case 'olt': return <Server className="h-5 w-5 text-emerald-600" />;
-      case 'odc': return <Box className="h-5 w-5 text-amber-600" />;
-      case 'odp': return <Box className="h-5 w-5 text-teal-600" />;
-      case 'splitter': return <Share2 className="h-5 w-5 text-rose-600" />;
-      case 'htb': return <Cpu className="h-5 w-5 text-purple-600" />;
-      case 'ont': return <Radio className="h-5 w-5 text-sky-600" />;
-      case 'mikrotik': return <Cpu className="h-5 w-5 text-orange-600" />;
-      case 'switch': return <Layers className="h-5 w-5 text-blue-600" />;
-      case 'switch_managed': return <Layers className="h-5 w-5 text-indigo-700" />;
-      case 'router': return <Radio className="h-5 w-5 text-cyan-600" />;
-      case 'ap_ptp': return <Radio className="h-5 w-5 text-sky-700" />;
-      case 'mesh': return <Radio className="h-5 w-5 text-emerald-600" />;
-      case 'access_point': return <Wifi className="h-5 w-5 text-sky-600" />;
-      case 'firewall': return <Shield className="h-5 w-5 text-red-600" />;
-      case 'nas': return <HardDrive className="h-5 w-5 text-slate-700" />;
-      case 'pc': return <Monitor className="h-5 w-5 text-slate-700" />;
-      case 'laptop': return <Laptop className="h-5 w-5 text-slate-700" />;
-      case 'printer': return <Printer className="h-5 w-5 text-teal-700" />;
-      case 'voip_phone': return <Phone className="h-5 w-5 text-sky-700" />;
-      case 'cctv': return <Camera className="h-5 w-5 text-purple-600" />;
-      case 'smartphone': return <Smartphone className="h-5 w-5 text-cyan-600" />;
-      case 'iot': return <Zap className="h-5 w-5 text-teal-600" />;
-      case 'server': return <Server className="h-5 w-5 text-slate-800" />;
-      default: return <Box className="h-5 w-5" />;
-    }
-  };
-
   return (
     <div
       id="network-canvas-container"
@@ -871,9 +824,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
 
               {/* Header Icon + Power Status */}
               <div className="flex items-center justify-between mb-1.5">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-50 border border-slate-100">
-                  {getNodeIcon(node.type)}
-                </div>
+                <DeviceIcon type={node.type} size={30} />
 
                 <div className="flex items-center gap-1">
                   <span

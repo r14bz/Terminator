@@ -11,8 +11,8 @@ export function l2Domains(nodes:readonly NetworkNode[],cables:readonly CableConn
 export function ipFor(n:NetworkNode){return n.type==='ont'?(n.ontConfig?.lanIp||n.ipConfig?.ip):n.ipConfig?.ip;}
 export function subnetFor(n:NetworkNode){return n.type==='ont'?(n.ontConfig?.lanSubnet||n.ipConfig?.subnet):n.ipConfig?.subnet;}
 export function gatewayFor(n:NetworkNode){return n.type==='ont'?(n.ontConfig?.staticWanGateway||n.ipConfig?.gateway):n.ipConfig?.gateway;}
-export function ipv4Network(ip:string,mask:string){return ipToNumber(ip)&ipToNumber(mask);}
-export function ipv4Broadcast(ip:string,mask:string){const hostBits=32-maskToPrefixLength(mask);return ipv4Network(ip,mask)+(2**hostBits-1);}
+export function ipv4Network(ip:string,mask:string){return (ipToNumber(ip)&ipToNumber(mask))>>>0;}
+export function ipv4Broadcast(ip:string,mask:string){const hostBits=32-maskToPrefixLength(mask);return (ipv4Network(ip,mask)+(2**hostBits-1))>>>0;}
 export function validAddressAndMask(n:NetworkNode,out:DiagnosticIssue[]){const ip=ipFor(n),mask=subnetFor(n);if(ip&&!isValidIpv4(ip))out.push(issue({id:`invalid-ip-${n.id}`,title:`IPv4 tidak valid pada "${n.name}"`,targetNodeId:n.id,category:'ip',cause:`Alamat ${ip} bukan IPv4 yang sah.`,solution:'Masukkan alamat IPv4 yang sah.'}));if(mask&&!isValidIpv4(mask))out.push(issue({id:`invalid-mask-${n.id}`,title:`Subnet mask tidak valid pada "${n.name}"`,targetNodeId:n.id,category:'ip',cause:`Subnet mask ${mask} bukan mask IPv4 yang sah.`,solution:'Masukkan subnet mask IPv4 yang sah.'}));}
 export function dhcpEnabled(n:NetworkNode){return n.type==='ont'?(n.ontConfig?.dhcpServerEnabled===true||n.ipConfig?.isDhcpServerEnabled===true):n.ipConfig?.isDhcpServerEnabled===true;}
 export function isRouter(n:NetworkNode){return ROUTERS.has(n.type)||(n.type==='ont'&&n.ontConfig?.wanMode!=='bridge');}

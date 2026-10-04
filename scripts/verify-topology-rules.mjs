@@ -10,10 +10,10 @@ const expectIssue = (name, nodes, cables, text) => assert.equal(has(validateTopo
 
 // P1/P2: isolated ONT router LANs may reuse the same default gateway without warning.
 {
-  const a=node('ont',{ontConfig:{brand:'A',model:'x',wanMode:'pppoe',lanIp:'192.168.1.1',lanSubnet:'255.255.255.0'}});
-  const b=node('ont',{ontConfig:{brand:'B',model:'x',wanMode:'pppoe',lanIp:'192.168.1.1',lanSubnet:'255.255.255.0'}});
+  const a=node('ont',{ontConfig:{brand:'A',model:'x',wanMode:'pppoe',pppoeUsername:'user',pppoePassword:'pass',lanIp:'192.168.1.1',lanSubnet:'255.255.255.0'}});
+  const b=node('ont',{ontConfig:{brand:'B',model:'x',wanMode:'pppoe',pppoeUsername:'user',pppoePassword:'pass',lanIp:'192.168.1.1',lanSubnet:'255.255.255.0'}});
   expectNoIssues('P1 same gateway on isolated ONTs', [a,b], []);
-  const c=node('ont',{ontConfig:{brand:'C',model:'x',wanMode:'pppoe',lanIp:'192.168.100.1',lanSubnet:'255.255.255.0'}});
+  const c=node('ont',{ontConfig:{brand:'C',model:'x',wanMode:'pppoe',pppoeUsername:'user',pppoePassword:'pass',lanIp:'192.168.100.1',lanSubnet:'255.255.255.0'}});
   expectNoIssues('P2 non-default gateway is valid', [c], []);
 }
 
@@ -22,8 +22,8 @@ const expectIssue = (name, nodes, cables, text) => assert.equal(has(validateTopo
   const a=node('pc',{ipConfig:{mode:'static',ip:'192.168.10.10',subnet:'255.255.255.0',gateway:'192.168.10.1'}});
   const b=node('server',{ipConfig:{mode:'static',ip:'192.168.10.10',subnet:'255.255.255.0',gateway:'192.168.10.1'}});
   expectIssue('P3 duplicate IP', [a,b], [cable(a,b)], 'IP bentrok');
-  const o1=node('ont',{ontConfig:{brand:'A',model:'x',wanMode:'pppoe',lanIp:'192.168.1.1',lanSubnet:'255.255.255.0'}});
-  const o2=node('ont',{ontConfig:{brand:'B',model:'x',wanMode:'pppoe',lanIp:'192.168.1.1',lanSubnet:'255.255.255.0'}});
+  const o1=node('ont',{ontConfig:{brand:'A',model:'x',wanMode:'pppoe',pppoeUsername:'user',pppoePassword:'pass',lanIp:'192.168.1.1',lanSubnet:'255.255.255.0'}});
+  const o2=node('ont',{ontConfig:{brand:'B',model:'x',wanMode:'pppoe',pppoeUsername:'user',pppoePassword:'pass',lanIp:'192.168.1.1',lanSubnet:'255.255.255.0'}});
   expectIssue('P4 duplicate ONT gateways after LAN interconnect', [o1,o2], [cable(o1,o2)], 'IP bentrok');
 }
 

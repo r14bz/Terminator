@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import {
-  Globe, Radio, Server, Layers, Box, Share2, Cpu, Monitor, Camera, Smartphone, Zap, Info,
-  ChevronDown, ChevronUp, Plus, Wifi, Shield, HardDrive, Laptop, Printer, Phone, X,
-} from 'lucide-react';
+import { Info, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
 import type { NodeType, DeviceCategory } from '../types/network';
+import { DeviceIcon } from './DeviceIcon';
 import { DEVICE_METADATA } from '../data/deviceDefinitions';
 
 interface DevicePaletteProps {
@@ -23,36 +21,7 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice, isOpe
   const [activeTab, setActiveTab] = useState<DeviceCategory>('ftth');
   const [hoveredDevice, setHoveredDevice] = useState<NodeType | null>(null);
 
-  const getDeviceIcon = (type: NodeType) => {
-    switch (type) {
-      case 'internet': return <Globe className="h-4 w-4 text-sky-600" />;
-      case 'metro': return <Radio className="h-4 w-4 text-indigo-600" />;
-      case 'olt': return <Server className="h-4 w-4 text-emerald-600" />;
-      case 'odc': return <Box className="h-4 w-4 text-amber-600" />;
-      case 'odp': return <Box className="h-4 w-4 text-teal-600" />;
-      case 'splitter': return <Share2 className="h-4 w-4 text-rose-600" />;
-      case 'htb': return <Cpu className="h-4 w-4 text-purple-600" />;
-      case 'ont': return <Radio className="h-4 w-4 text-sky-600" />;
-      case 'mikrotik': return <Cpu className="h-4 w-4 text-orange-600" />;
-      case 'switch': return <Layers className="h-4 w-4 text-blue-600" />;
-      case 'switch_managed': return <Layers className="h-4 w-4 text-indigo-700" />;
-      case 'router': return <Radio className="h-4 w-4 text-cyan-600" />;
-      case 'ap_ptp': return <Radio className="h-4 w-4 text-sky-700" />;
-      case 'mesh': return <Radio className="h-4 w-4 text-emerald-600" />;
-      case 'access_point': return <Wifi className="h-4 w-4 text-sky-600" />;
-      case 'firewall': return <Shield className="h-4 w-4 text-red-600" />;
-      case 'nas': return <HardDrive className="h-4 w-4 text-slate-700" />;
-      case 'pc': return <Monitor className="h-4 w-4 text-slate-700" />;
-      case 'laptop': return <Laptop className="h-4 w-4 text-slate-700" />;
-      case 'printer': return <Printer className="h-4 w-4 text-teal-700" />;
-      case 'voip_phone': return <Phone className="h-4 w-4 text-sky-700" />;
-      case 'cctv': return <Camera className="h-4 w-4 text-purple-600" />;
-      case 'smartphone': return <Smartphone className="h-4 w-4 text-cyan-600" />;
-      case 'iot': return <Zap className="h-4 w-4 text-teal-600" />;
-      case 'server': return <Server className="h-4 w-4 text-slate-800" />;
-      default: return <Box className="h-4 w-4" />;
-    }
-  };
+  const getDeviceIcon = (type: NodeType) => <DeviceIcon type={type} size={28} />;
 
   const devicesInCategory = Object.values(DEVICE_METADATA).filter((d) => d.category === activeTab);
   const hoveredMeta = hoveredDevice ? DEVICE_METADATA[hoveredDevice] : null;
@@ -105,9 +74,7 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice, isOpe
               onMouseLeave={() => setHoveredDevice(null)}
               className="group flex min-w-0 items-start gap-2 rounded-lg border border-slate-200/90 bg-white p-2 text-left transition-all hover:border-sky-300 hover:bg-sky-50/40 hover:shadow-2xs"
             >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 transition-colors group-hover:border-sky-300 group-hover:bg-white">
-                {getDeviceIcon(dev.type)}
-              </div>
+              {getDeviceIcon(dev.type)}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between">
                   <span className="line-clamp-2 whitespace-normal text-xs font-semibold leading-tight text-slate-800 group-hover:text-sky-900">{dev.name.split('(')[0]}</span>

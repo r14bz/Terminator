@@ -13,7 +13,12 @@ export async function resolve(specifier, context, nextResolve) {
     return await nextResolve(specifier, context);
   } catch (err) {
     if (specifier.startsWith('.') && !/\.[cm]?[jt]sx?$/.test(specifier)) {
-      return await nextResolve(`${specifier}.ts`, context);
+      try {
+        return await nextResolve(`${specifier}.ts`, context);
+      } catch {
+        // Import folder (mis. '../rules') -> folder/index.ts, seperti bundler.
+        return await nextResolve(`${specifier.replace(/\/$/, '')}/index.ts`, context);
+      }
     }
     throw err;
   }
