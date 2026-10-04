@@ -36,6 +36,8 @@ interface NavbarProps {
   onRedo: () => void;
   onExportJson: () => void;
   onImportJson: (data: any) => void;
+  onInstallPwa: () => void;
+  canInstallPwa: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -54,6 +56,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onRedo,
   onExportJson,
   onImportJson,
+  onInstallPwa,
+  canInstallPwa,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [aiStatus, setAiStatus] = useState<AiStatusInfo | null>(null);
@@ -184,6 +188,21 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             )}
           </button>
+
+          {/* PWA install */}
+          <button
+            onClick={onInstallPwa}
+            className={`mobile-header-action flex items-center justify-center gap-1 rounded-lg border px-2 py-1.5 transition-colors shadow-2xs ${
+              canInstallPwa
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+            }`}
+            title={canInstallPwa ? 'Install Terminator sebagai aplikasi' : 'Petunjuk memasang Terminator sebagai aplikasi'}
+            aria-label="Install Terminator PWA"
+          >
+            <Download className="h-4 w-4 rotate-180" />
+            <span className="hidden sm:inline text-xs font-semibold">Pasang</span>
+          </button>
         </nav>
 
         {/* Zone 3: Desktop Primary Action Cluster (Hidden on mobile, moved to responsive subrow) */}
@@ -209,7 +228,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Import / Export Topology JSON */}
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" />
           <button
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors shadow-2xs"

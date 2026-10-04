@@ -45,7 +45,7 @@ import { zoomIn, zoomOut } from './utils/zoom';
 import type { HistoryState } from './utils/historyCore';
 import { canRedo as stackCanRedo, canUndo as stackCanUndo, createHistory, isSameSnapshot, pushSnapshot, redo as stackRedo, undo as stackUndo } from './utils/historyCore';
 import { toBlob } from 'html-to-image';
-import { Plus, Undo2, Camera, Download, RotateCcw, Play, Pause } from 'lucide-react';
+import { Plus, Undo2, Camera, Download, Upload, RotateCcw, Play, Pause, ChevronUp } from 'lucide-react';
 
 // Templates are module-level singletons. Seeding state with them directly
 // would alias the same node/cable objects, so any in-place mutation (e.g.
@@ -60,6 +60,11 @@ import { Plus, Undo2, Camera, Download, RotateCcw, Play, Pause } from 'lucide-re
 const cloneTemplate = (t: TopologyTemplate) => {
   const cables = structuredClone(t.cables);
   return { nodes: reconcilePorts(structuredClone(t.nodes), cables), cables };
+};
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
 export default function App() {
@@ -183,6 +188,42 @@ export default function App() {
     setProbedNodeId(null);
     showToast(`Topologi "${data.name || 'tanpa nama'}" berhasil diimport.`);
     requestAnimationFrame(() => canvasRef.current?.fitView());
+  };
+
+  // PWA install prompt. Chrome/Android exposes this event when the app is
+  // installable; the button remains available on unsupported browsers and
+  // explains how to install manually.
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [mobileJsonMenuOpen, setMobileJsonMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    const handleInstalled = () => setInstallPrompt(null);
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleInstalled);
+    };
+  }, []);
+
+  const handleInstallPwa = async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      await installPrompt.userChoice;
+      setInstallPrompt(null);
+      return;
+    }
+
+    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const message = isIos
+      ? 'Untuk memasang Terminator di iPhone/iPad: buka menu Bagikan, lalu pilih “Add to Home Screen”.'
+      : 'Jika browser mendukung PWA, buka menu browser lalu pilih “Install app” atau “Tambahkan ke layar utama”.';
+    showToast(message);
   };
 
   const [isRunning, setIsRunning] = useState<boolean>(true);
@@ -872,6 +913,8 @@ export default function App() {
         onRedo={handleRedo}
         onExportJson={handleExportJson}
         onImportJson={handleImportJson}
+        onInstallPwa={handleInstallPwa}
+        canInstallPwa={Boolean(installPrompt)}
       />
 
       {/* Cable & Interactive Tool Controls */}
@@ -963,9 +1006,46 @@ export default function App() {
         <button onClick={handleSaveTopologyImage} className="mobile-dock-btn" title="Simpan gambar">
           <Camera /><span>Foto</span>
         </button>
-        <button onClick={handleExportJson} className="mobile-dock-btn" title="Simpan JSON">
-          <Download /><span>JSON</span>
-        </button>
+        <div className="relative min-w-0">
+          {mobileJsonMenuOpen && (
+            <>
+              <button
+                type="button"
+                aria-label="Tutup menu JSON"
+                className="fixed inset-0 z-80 cursor-default"
+                onClick={() => setMobileJsonMenuOpen(false)}
+              />
+              <div className="mobile-json-menu absolute bottom-[58px] left-1/2 z-100 w-44 -translate-x-1/2 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => { setMobileJsonMenuOpen(false); document.querySelector<HTMLInputElement>('input[type="file"][accept=".json,application/json"]')?.click(); }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-sky-50 hover:text-sky-800"
+                >
+                  <Upload className="h-4 w-4 text-sky-600" />
+                  <span>Import JSON</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMobileJsonMenuOpen(false); handleExportJson(); }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
+                >
+                  <Download className="h-4 w-4 text-emerald-600" />
+                  <span>Download JSON</span>
+                </button>
+              </div>
+            </>
+          )}
+          <button
+            onClick={() => setMobileJsonMenuOpen((open) => !open)}
+            className="mobile-dock-btn w-full"
+            title="Import atau download JSON"
+            aria-label="Menu JSON"
+            aria-expanded={mobileJsonMenuOpen}
+          >
+            <Download />
+            <span>JSON</span>
+          </button>
+        </div>
         <button onClick={handleReset} className="mobile-dock-btn" title="Kosongkan kanvas">
           <RotateCcw /><span>Reset</span>
         </button>

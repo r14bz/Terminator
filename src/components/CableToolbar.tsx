@@ -140,7 +140,7 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
       {/* Cable Selector */}
       <div className="cable-toolbar-cables flex items-center gap-1.5 overflow-x-auto py-0.5">
         <span className="text-[11px] font-medium text-slate-500 hidden sm:inline">
-          Tipe Kabel:
+          Pilih jenis kabel
         </span>
         {(Object.keys(CABLE_METADATA) as NodeCableType[]).map((cableKey) => {
           const meta = CABLE_METADATA[cableKey];

@@ -24,17 +24,21 @@
     gap: 5px !important;
   }
 
-  .app-navbar .app-navbar-nav > button:not(:last-child) {
+  .app-navbar .app-navbar-nav > button:not(.mobile-header-action) {
     display: none !important;
   }
 
-  .app-navbar .app-navbar-nav > button:last-child {
-    padding: 8px 10px !important;
+  .app-navbar .app-navbar-nav > .mobile-header-action {
+    padding: 8px 9px !important;
     border-radius: 12px !important;
   }
 
-  .app-navbar .app-navbar-nav > button:last-child span:first-of-type {
+  .app-navbar .app-navbar-nav > .mobile-header-action span:first-of-type {
     display: none !important;
+  }
+
+  .app-navbar .app-navbar-nav > .mobile-header-action {
+    min-width: 38px;
   }
 
   .app-navbar .app-mobile-control-bar {
@@ -98,25 +102,61 @@
     display: none !important;
   }
 
+  /* Cable picker: mobile bottom sheet, never a horizontal strip.
+     It sits just above the persistent bottom dock so the canvas and toolbar
+     stay clear while cable types remain thumb-friendly. */
   .cable-toolbar.cable-mode-active .cable-toolbar-cables {
-    display: flex !important;
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    top: 55px;
-    z-index: 40;
-    padding: 7px;
+    display: grid !important;
+    position: fixed !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: calc(var(--mobile-dock-space, 86px) + 8px) !important;
+    top: auto !important;
+    z-index: 89 !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    padding: 10px;
     border: 1px solid #dbe3ec;
-    border-radius: 13px;
-    background: rgba(255,255,255,.97);
-    box-shadow: 0 10px 28px rgba(15,23,42,.14);
-    overflow-x: auto;
+    border-radius: 18px;
+    background: rgba(255,255,255,.98);
+    box-shadow: 0 14px 34px rgba(15,23,42,.20);
+    backdrop-filter: blur(16px);
+    overflow: auto;
+    max-height: min(42vh, 360px);
+  }
+
+  .cable-toolbar.cable-mode-active .cable-toolbar-cables::before {
+    content: '';
+    grid-column: 1 / -1;
+    width: 34px;
+    height: 4px;
+    margin: 0 auto 1px;
+    border-radius: 999px;
+    background: #cbd5e1;
+  }
+
+  .cable-toolbar.cable-mode-active .cable-toolbar-cables > span {
+    display: block !important;
+    grid-column: 1 / -1;
+    padding: 1px 2px 3px;
+    font-size: 12px !important;
+    font-weight: 800;
+    color: #334155;
   }
 
   .cable-toolbar.cable-mode-active .cable-toolbar-cables button {
-    min-height: 34px;
-    flex: 0 0 auto;
-    border-radius: 9px;
+    min-width: 0;
+    min-height: 44px;
+    width: 100%;
+    justify-content: flex-start;
+    border-radius: 11px;
+    overflow: hidden;
+  }
+
+  .cable-toolbar.cable-mode-active .cable-toolbar-cables button span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .cable-toolbar-zoom {
@@ -290,9 +330,9 @@
      while the backdrop makes it obvious that the canvas is temporarily
      covered rather than accidentally losing nodes behind the sheet. */
   .device-palette {
-    bottom: calc(var(--mobile-dock-space) + 8px) !important;
+    bottom: calc(var(--mobile-dock-space) + 28px) !important;
     z-index: 80 !important;
-    max-height: min(56vh, 500px) !important;
+    max-height: min(58vh, 520px) !important;
   }
 
   .device-palette-backdrop {
@@ -306,7 +346,8 @@
   }
 
   .device-palette > div:nth-child(2) {
-    max-height: calc(min(56vh, 500px) - 54px) !important;
+    max-height: calc(min(58vh, 520px) - 54px) !important;
+    padding-bottom: 18px !important;
   }
 
   /* Floating instruments/cards are raised above the dock and get their own
