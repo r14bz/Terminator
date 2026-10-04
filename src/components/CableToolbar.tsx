@@ -159,7 +159,7 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
                 (isSelected
                   ? 'border-sky-500 bg-sky-50 text-sky-900 font-semibold shadow-2xs'
                   : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50')}
-              title={`${meta.name}: ${meta.shortDesc} (Klik untuk hubungkan)`}
+              title={meta.name + ': ' + meta.shortDesc + ' (Klik untuk hubungkan)'}
             >
               <span
                 className="h-2 w-2 rounded-full shrink-0"
