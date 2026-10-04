@@ -43,11 +43,10 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
             onCancelConnection();
             onCancelPing();
           }}
-          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ${
-            activeTool === 'select'
+          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
+            (activeTool === 'select'
               ? 'bg-slate-900 text-white shadow-2xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-          }`}
+              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
           title="Klik node atau kabel untuk melihat detail, konfigurasi, dan status"
         >
           <MousePointer className="h-3.5 w-3.5" />
@@ -61,11 +60,10 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
             onCancelConnection();
             onCancelPing();
           }}
-          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ${
-            activeTool === 'move'
+          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
+            (activeTool === 'move'
               ? 'bg-indigo-600 text-white shadow-2xs ring-2 ring-indigo-300'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-          }`}
+              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
           title="Mode Khusus: Sentuh/tarik perangkat untuk memindahkan posisinya di kanvas"
         >
           <Move className="h-3.5 w-3.5" />
@@ -79,11 +77,10 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
             onCancelConnection();
             onCancelPing();
           }}
-          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ${
-            activeTool === 'pan'
+          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
+            (activeTool === 'pan'
               ? 'bg-slate-700 text-white shadow-2xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-          }`}
+              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
           title="Geser area tampilan kanvas"
         >
           <Hand className="h-3.5 w-3.5" />
@@ -96,11 +93,10 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
             setActiveTool('cable');
             onCancelPing();
           }}
-          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ${
-            activeTool === 'cable'
+          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
+            (activeTool === 'cable'
               ? 'bg-sky-600 text-white shadow-2xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-          }`}
+              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
           title="Tarik kabel antar port perangkat"
         >
           <Cable className="h-3.5 w-3.5" />
@@ -114,11 +110,10 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
             onCancelConnection();
             onCancelPing();
           }}
-          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ${
-            activeTool === 'opm'
+          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
+            (activeTool === 'opm'
               ? 'bg-emerald-600 text-white shadow-2xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-          }`}
+              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
           title="Optical Power Meter: Klik perangkat/kabel untuk cek daya optik (dBm)"
         >
           <Activity className="h-3.5 w-3.5" />
@@ -131,11 +126,10 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
             setActiveTool('ping');
             onCancelConnection();
           }}
-          className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ${
-            activeTool === 'ping'
+          className={'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-all shrink-0 ' +
+            (activeTool === 'ping'
               ? 'bg-purple-600 text-white shadow-2xs'
-              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-          }`}
+              : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900')}
           title="Uji kirim paket ICMP Ping dari perangkat asal ke tujuan"
         >
           <Send className="h-3.5 w-3.5" />
@@ -161,11 +155,10 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
                   onCancelPing();
                 }
               }}
-              className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-all whitespace-nowrap border ${
-                isSelected
+              className={'flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-all whitespace-nowrap border ' +
+                (isSelected
                   ? 'border-sky-500 bg-sky-50 text-sky-900 font-semibold shadow-2xs'
-                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
-              }`}
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50')}
               title={`${meta.name}: ${meta.shortDesc} (Klik untuk hubungkan)`}
             >
               <span
