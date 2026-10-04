@@ -82,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const warningCount = issues.filter((i) => i.severity === 'warning').length;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 px-3 py-2 sm:px-4 sm:py-2.5 backdrop-blur-md shadow-2xs">
+    <header className="app-navbar sticky top-0 z-40 border-b border-slate-200 bg-white/95 px-3 py-2 sm:px-4 sm:py-2.5 backdrop-blur-md shadow-2xs">
       {/* Primary Row: Brand, Modals & (on Desktop) Action Buttons */}
       <div className="flex items-center justify-between gap-2">
         {/* Zone 1: Wordmark & Logo */}
@@ -111,7 +111,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Zone 2: Navigation Modals (Topologi, Kamus, Diagnosa) */}
-        <nav className="flex items-center gap-1 sm:gap-2 shrink-0">
+        <nav className="app-navbar-nav flex items-center gap-1 sm:gap-2 shrink-0">
           <button
             onClick={onOpenTemplates}
             className="flex items-center gap-1 sm:gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5 sm:px-2.5 sm:py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-2xs whitespace-nowrap"
@@ -187,7 +187,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Zone 3: Desktop Primary Action Cluster (Hidden on mobile, moved to responsive subrow) */}
-        <div className="hidden md:flex items-center gap-2 shrink-0">
+        <div className="app-desktop-actions hidden md:flex items-center gap-2 shrink-0">
           {/* Undo / Redo */}
           <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
             <button
@@ -271,7 +271,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Mobile-Exclusive Control Bar (Under 768px) */}
-      <div className="flex md:hidden flex-col gap-1.5 pt-2 mt-2 border-t border-slate-100">
+      <div className="app-mobile-control-bar flex md:hidden flex-col gap-1.5 pt-2 mt-2 border-t border-slate-100">
         {/* Row 1: Undo/Redo + Import/Export */}
         <div className="flex items-center gap-1.5">
           <button

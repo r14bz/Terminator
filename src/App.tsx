@@ -45,6 +45,7 @@ import { zoomIn, zoomOut } from './utils/zoom';
 import type { HistoryState } from './utils/historyCore';
 import { canRedo as stackCanRedo, canUndo as stackCanUndo, createHistory, isSameSnapshot, pushSnapshot, redo as stackRedo, undo as stackUndo } from './utils/historyCore';
 import { toBlob } from 'html-to-image';
+import { Plus, Undo2, Camera, Download, RotateCcw, Play, Pause } from 'lucide-react';
 
 // Templates are module-level singletons. Seeding state with them directly
 // would alias the same node/cable objects, so any in-place mutation (e.g.
@@ -187,6 +188,7 @@ export default function App() {
   const [isRunning, setIsRunning] = useState<boolean>(true);
   const [activeTool, setActiveTool] = useState<ActiveTool>('select');
   const [selectedCableType, setSelectedCableType] = useState<NodeCableType>('drop_core');
+  const [isMobilePaletteOpen, setIsMobilePaletteOpen] = useState(false);
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedCableId, setSelectedCableId] = useState<string | null>(null);
@@ -891,7 +893,11 @@ export default function App() {
       {/* Main Workspace (Device Palette + Canvas + Side Inspector) */}
       <div className="relative flex flex-1 flex-col md:flex-row overflow-hidden">
         {/* Device Library & Palette */}
-        <DevicePalette onAddDevice={handleAddDevice} />
+        <DevicePalette
+          onAddDevice={(type) => { handleAddDevice(type); setIsMobilePaletteOpen(false); }}
+          mobileOpen={isMobilePaletteOpen}
+          onMobileToggle={() => setIsMobilePaletteOpen((open) => !open)}
+        />
 
         {/* Interactive Network Topology Canvas */}
         <Canvas
@@ -943,6 +949,29 @@ export default function App() {
             onOpenAiChat={handleOpenAiChat}
           />
         )}
+      </div>
+
+      {/* Mobile quick actions: the canvas stays visible while secondary actions
+          live in a thumb-friendly bottom dock. */}
+      <div className="mobile-quick-dock md:hidden" aria-label="Kontrol cepat mobile">
+        <button onClick={() => setIsMobilePaletteOpen(true)} className="mobile-dock-btn mobile-dock-primary" title="Tambah perangkat">
+          <Plus /><span>Perangkat</span>
+        </button>
+        <button onClick={handleUndo} disabled={!canUndo} className="mobile-dock-btn" title="Urungkan">
+          <Undo2 /><span>Undo</span>
+        </button>
+        <button onClick={handleSaveTopologyImage} className="mobile-dock-btn" title="Simpan gambar">
+          <Camera /><span>Foto</span>
+        </button>
+        <button onClick={handleExportJson} className="mobile-dock-btn" title="Simpan JSON">
+          <Download /><span>JSON</span>
+        </button>
+        <button onClick={handleReset} className="mobile-dock-btn" title="Kosongkan kanvas">
+          <RotateCcw /><span>Reset</span>
+        </button>
+        <button onClick={() => setIsRunning((v) => !v)} className={`mobile-dock-btn mobile-dock-run ${isRunning ? 'running' : ''}`} title="Jalankan atau jeda simulasi">
+          {isRunning ? <Pause /> : <Play />}<span>{isRunning ? 'Jeda' : 'Run'}</span>
+        </button>
       </div>
 
       {/* Floating Cable Inspector & Deletion tool */}

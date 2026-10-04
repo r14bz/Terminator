@@ -33,9 +33,9 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
   onCancelPing,
 }) => {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 text-xs shadow-2xs">
+    <div className={`cable-toolbar ${activeTool === 'cable' ? 'cable-mode-active' : ''} flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-3 py-2 text-xs shadow-2xs">
       {/* Primary Tool Modes */}
-      <div className="flex items-center gap-1 overflow-x-auto">
+      <div className="cable-toolbar-tools flex items-center gap-1 overflow-x-auto">
         {/* Tool 1: Pilih / Inspeksi */}
         <button
           onClick={() => {
@@ -144,7 +144,7 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
       </div>
 
       {/* Cable Selector */}
-      <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+      <div className="cable-toolbar-cables flex items-center gap-1.5 overflow-x-auto py-0.5">
         <span className="text-[11px] font-medium text-slate-500 hidden sm:inline">
           Tipe Kabel:
         </span>
@@ -204,7 +204,7 @@ export const CableToolbar: React.FC<CableToolbarProps> = ({
       )}
 
       {/* Zoom controls & 2-finger indicator */}
-      <div className="flex items-center gap-1.5 text-slate-600">
+      <div className="cable-toolbar-zoom flex items-center gap-1.5 text-slate-600">
         <span className="hidden xl:inline text-[10px] text-slate-400">
           (Cubit 2 jari untuk zoom)
         </span>

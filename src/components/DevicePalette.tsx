@@ -27,6 +27,8 @@ import { DEVICE_METADATA } from '../data/deviceDefinitions';
 
 interface DevicePaletteProps {
   onAddDevice: (type: NodeType) => void;
+  mobileOpen?: boolean;
+  onMobileToggle?: () => void;
 }
 
 const CATEGORY_TABS: Array<{ id: DeviceCategory; label: string }> = [
@@ -36,13 +38,18 @@ const CATEGORY_TABS: Array<{ id: DeviceCategory; label: string }> = [
   { id: 'infrastructure', label: 'Infrastruktur' },
 ];
 
-export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice }) => {
+export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice, mobileOpen, onMobileToggle }) => {
   const [activeTab, setActiveTab] = useState<DeviceCategory>('ftth');
   // Tertutup secara default di tampilan mobile (< md / 768px); di desktop selalu terbuka.
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
   );
   const [hoveredDevice, setHoveredDevice] = useState<NodeType | null>(null);
+  const collapsed = mobileOpen === undefined ? isCollapsed : !mobileOpen;
+  const toggleCollapsed = () => {
+    if (onMobileToggle) onMobileToggle();
+    else setIsCollapsed((v) => !v);
+  };
 
   const getDeviceIcon = (type: NodeType) => {
     switch (type) {
@@ -108,7 +115,7 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice }) => 
   const hoveredMeta = hoveredDevice ? DEVICE_METADATA[hoveredDevice] : null;
 
   return (
-    <aside className="relative flex flex-col border-b md:border-b-0 md:border-r border-slate-200 bg-white shadow-xs z-20 md:w-72 shrink-0">
+    <aside className="device-palette relative flex flex-col border-b md:border-b-0 md:border-r border-slate-200 bg-white shadow-xs z-20 md:w-72 shrink-0">
       {/* Header bar */}
       <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-100 bg-slate-50/70">
         <div className="flex items-center gap-2">
@@ -120,17 +127,17 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice }) => 
           </span>
         </div>
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={toggleCollapsed}
           className="md:hidden p-1 text-slate-500 hover:text-slate-800 rounded"
           title="Buka/Tutup Palet"
         >
-          {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </button>
       </div>
 
       {/* Di desktop (md+) konten selalu tampil; di mobile mengikuti isCollapsed */}
       {(
-        <div className={`${isCollapsed ? 'hidden md:flex' : 'flex'} flex-col p-2.5 space-y-2`}>
+        <div className={`${collapsed ? 'hidden md:flex' : 'flex'} flex-col p-2.5 space-y-2`}>
           {/* Category Tabs (Segmented Control) */}
           <div className="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-lg">
             {CATEGORY_TABS.map((tab) => (
