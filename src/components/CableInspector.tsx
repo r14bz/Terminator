@@ -54,7 +54,7 @@ export const CableInspector: React.FC<CableInspectorProps> = ({
   };
 
   return (
-    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 w-11/12 max-w-lg rounded-2xl border-2 border-slate-300 bg-white/95 p-4 text-slate-800 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom duration-200">
+    <div className="cable-inspector-floating fixed bottom-5 left-1/2 -translate-x-1/2 z-[80] w-11/12 max-w-lg rounded-2xl border-2 border-slate-300 bg-white/95 p-4 text-slate-800 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom duration-200">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
         <div className="flex items-center gap-2">

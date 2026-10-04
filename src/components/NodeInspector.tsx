@@ -239,7 +239,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   };
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[420px] border-l border-slate-200 bg-white shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-y-0 right-0 z-[100] w-full sm:w-[420px] border-l border-slate-200 bg-white shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50/90">
         <div className="flex items-center gap-2.5">

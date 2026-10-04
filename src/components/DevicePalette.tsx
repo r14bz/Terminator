@@ -115,7 +115,16 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice, mobil
   const hoveredMeta = hoveredDevice ? DEVICE_METADATA[hoveredDevice] : null;
 
   return (
-    <aside className="device-palette relative flex flex-col border-b md:border-b-0 md:border-r border-slate-200 bg-white shadow-xs z-20 md:w-72 shrink-0">
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Tutup katalog perangkat"
+          onClick={onMobileToggle}
+          className="device-palette-backdrop md:hidden"
+        />
+      )}
+      <aside className="device-palette relative flex flex-col border-b md:border-b-0 md:border-r border-slate-200 bg-white shadow-xs z-20 md:w-72 shrink-0">
       {/* Header bar */}
       <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-100 bg-slate-50/70">
         <div className="flex items-center gap-2">
@@ -209,6 +218,7 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice, mobil
           </div>
         </div>
       )}
-    </aside>
+      </aside>
+    </>
   );
 };

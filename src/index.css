@@ -268,3 +268,68 @@
   .device-palette + * { min-height: 0; }
   .device-palette > div:nth-child(2) { max-height: calc(min(72vh, 590px) - 54px) !important; }
 }
+
+/* -------------------------------------------------------------------------
+   Mobile overlay/layering fix
+   The bottom dock is a persistent navigation surface. Floating tools and
+   modal/drawer content must never disappear underneath it.
+   ------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  :root {
+    --mobile-dock-height: 78px;
+    --mobile-safe-bottom: max(8px, env(safe-area-inset-bottom));
+    --mobile-dock-space: calc(var(--mobile-dock-height) + var(--mobile-safe-bottom));
+  }
+
+  .mobile-quick-dock {
+    bottom: var(--mobile-safe-bottom) !important;
+    z-index: 90 !important;
+  }
+
+  /* The catalog is a true bottom sheet: when open it sits above the dock,
+     while the backdrop makes it obvious that the canvas is temporarily
+     covered rather than accidentally losing nodes behind the sheet. */
+  .device-palette {
+    bottom: calc(var(--mobile-dock-space) + 8px) !important;
+    z-index: 80 !important;
+    max-height: min(56vh, 500px) !important;
+  }
+
+  .device-palette-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 75;
+    border: 0;
+    padding: 0;
+    background: rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(1px);
+  }
+
+  .device-palette > div:nth-child(2) {
+    max-height: calc(min(56vh, 500px) - 54px) !important;
+  }
+
+  /* Floating instruments/cards are raised above the dock and get their own
+     safe bottom offset, so OPM and cable actions remain fully clickable. */
+  .opm-floating-tool {
+    bottom: calc(var(--mobile-dock-space) + 8px) !important;
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+    max-width: none !important;
+    z-index: 95 !important;
+  }
+
+  .cable-inspector-floating {
+    bottom: calc(var(--mobile-dock-space) + 8px) !important;
+    width: calc(100vw - 20px) !important;
+    max-width: none !important;
+    z-index: 95 !important;
+  }
+
+  /* Node configuration and full-screen modals must sit above the persistent
+     dock. Their internal Save/Delete controls therefore remain reachable. */
+  .fixed.inset-y-0.right-0.z-80 {
+    z-index: 100 !important;
+  }
+}
