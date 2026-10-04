@@ -121,3 +121,31 @@ html[data-theme='dark'] button,
 html[data-theme='dark'] [role='button'] {
   color-scheme: dark;
 }
+
+
+/* Layout surfaces that are rendered outside the main cards. */
+html[data-theme='dark'] .border-b,
+html[data-theme='dark'] .border-r,
+html[data-theme='dark'] .border-t,
+html[data-theme='dark'] .border-l {
+  border-color: #334155 !important;
+}
+
+html[data-theme='dark'] .canvas-surface,
+html[data-theme='dark'] [data-canvas-surface] {
+  background-color: #0b1220 !important;
+  color: #e5edf7;
+}
+
+html[data-theme='dark'] .canvas-surface button,
+html[data-theme='dark'] [data-canvas-surface] button {
+  background-color: #111827;
+  border-color: #334155;
+  color: #cbd5e1;
+}
+
+html[data-theme='dark'] .canvas-surface button:hover,
+html[data-theme='dark'] [data-canvas-surface] button:hover {
+  background-color: #1e293b;
+  color: #fff;
+}

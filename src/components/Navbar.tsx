@@ -213,18 +213,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Theme toggle: tetap ringkas di mobile, lengkap di desktop. */}
           <button
             onClick={onToggleTheme}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-slate-900 transition-colors dark-theme-control"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-slate-900 transition-colors dark-theme-control sm:h-auto sm:w-auto sm:gap-1.5 sm:px-2.5 sm:py-2"
             title={theme === 'dark' ? 'Mode terang' : 'Mode gelap'}
             aria-label={theme === 'dark' ? 'Aktifkan mode terang' : 'Aktifkan mode gelap'}
           >
             {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-500" /> : <Moon className="h-4 w-4 text-slate-600" />}
-            <span className="hidden lg:inline">{theme === 'dark' ? 'Terang' : 'Gelap'}</span>
+            <span className="hidden sm:inline lg:inline">{theme === 'dark' ? 'Terang' : 'Gelap'}</span>
           </button>
 
           {/* PWA install button: always visible on mobile next to AI. */}
           <button
             onClick={handleInstallPwa}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-slate-900 transition-colors"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-slate-900 transition-colors sm:h-auto sm:w-auto sm:gap-1.5 sm:px-2.5 sm:py-2"
             title="Install Terminator"
             aria-label="Install Terminator"
           >

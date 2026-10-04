@@ -529,6 +529,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(({
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
+      data-canvas-surface
       className={`relative flex-1 h-full w-full overflow-hidden select-none transition-colors duration-150 touch-none ${
         gridStyle === 'clean' ? 'bg-[#f8fafc]' : 'bg-[#f1f5f9]'
       } ${

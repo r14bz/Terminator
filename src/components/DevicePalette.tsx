@@ -61,7 +61,7 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice, isOpe
     <aside
       className={`
         md:relative md:flex md:flex-col md:w-72 md:shrink-0 md:border-r md:border-slate-200 md:bg-white md:shadow-xs md:z-20
-        fixed inset-x-3 bottom-[92px] z-[55] flex-col max-h-[calc(100dvh-190px)] overflow-hidden rounded-2xl border border-slate-200 bg-white/98 shadow-2xl backdrop-blur-md
+        fixed left-2 right-2 bottom-[96px] z-[55] flex-col w-auto max-w-none max-h-[calc(100dvh-190px)] overflow-hidden rounded-2xl border border-slate-200 bg-white/98 shadow-2xl backdrop-blur-md
         transition-all duration-200
         ${isOpen ? 'flex' : 'hidden md:flex'}
       `}
@@ -96,24 +96,24 @@ export const DevicePalette: React.FC<DevicePaletteProps> = ({ onAddDevice, isOpe
           ))}
         </div>
 
-        <div className="grid min-h-0 grid-cols-2 gap-1.5 overflow-y-auto pr-0.5 md:grid-cols-1">
+        <div className="grid min-h-0 grid-cols-2 gap-2 overflow-y-auto pr-0.5 md:grid-cols-1">
           {devicesInCategory.map((dev) => (
             <button
               key={dev.type}
               onClick={() => onAddDevice(dev.type)}
               onMouseEnter={() => setHoveredDevice(dev.type)}
               onMouseLeave={() => setHoveredDevice(null)}
-              className="group flex items-start gap-2 rounded-lg border border-slate-200/90 bg-white p-2 text-left transition-all hover:border-sky-300 hover:bg-sky-50/40 hover:shadow-2xs"
+              className="group flex min-w-0 items-start gap-2 rounded-lg border border-slate-200/90 bg-white p-2 text-left transition-all hover:border-sky-300 hover:bg-sky-50/40 hover:shadow-2xs"
             >
               <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 transition-colors group-hover:border-sky-300 group-hover:bg-white">
                 {getDeviceIcon(dev.type)}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between">
-                  <span className="truncate text-xs font-semibold text-slate-800 group-hover:text-sky-900">{dev.name.split('(')[0]}</span>
+                  <span className="line-clamp-2 whitespace-normal text-xs font-semibold leading-tight text-slate-800 group-hover:text-sky-900">{dev.name.split('(')[0]}</span>
                   <Plus className="h-3.5 w-3.5 shrink-0 text-slate-400 opacity-0 transition-opacity group-hover:text-sky-600 group-hover:opacity-100" />
                 </div>
-                <p className="line-clamp-1 text-[10px] leading-tight text-slate-500">{dev.shortDesc}</p>
+                <p className="line-clamp-2 text-[10px] leading-tight text-slate-500">{dev.shortDesc}</p>
               </div>
             </button>
           ))}
