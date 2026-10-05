@@ -119,6 +119,12 @@ export interface NetworkNode {
     wifiPassword?: string;
     ponStatus?: 'O5 (Operational)' | 'O1 (Init)' | 'O3 (Serial Number Mismatch)' | 'LOS (No Signal)';
     adminIp?: string;
+    /**
+     * Ke mana ONT ini memanggil PPPoE. 'bras' = ISP, 'mikrotik' = ONT RT/RW net
+     * yang dial ke MikroTik milik sendiri. Kosong = tidak terdefinisi, aturan
+     * PPPoE 5.4 tidak dievaluasi untuk ONT ini.
+     */
+    pppoeTarget?: 'bras' | 'mikrotik';
   };
 
   // Real Switch Hub Hardware Config
@@ -260,6 +266,38 @@ export interface NetworkNode {
     totalQueues: number;
     bandwidthLimitMbps?: number;
     routerOsVersion?: string;
+
+    /**
+     * Konfigurasi terstruktur mengikuti menu RouterOS. Semua opsional: node lama
+     * tanpa field ini tetap valid, dan aturan 5.1 sampai 5.6 ditandai
+     * "tidak terdefinisi" untuk node tersebut (bukan error).
+     */
+    /** Interfaces: port ether dan interface VLAN. */
+    interfaces?: Array<{ name: string; type: 'ether' | 'vlan'; vlanId?: number; parent?: string }>;
+    /** IP > Addresses. */
+    addresses?: Array<{ address: string; mask: string; interface: string }>;
+    /** IP > DHCP Server. */
+    dhcpServers?: Array<{ interface: string; poolStart: string; poolEnd: string; gateway?: string; dns?: string }>;
+    /** IP > Routes. dst '0.0.0.0/0' = default route. */
+    routes?: Array<{ dst: string; gateway: string }>;
+    /** Interface keluar ke ONT ISP. Dipakai bila belum ada default route. */
+    uplinkInterface?: string;
+    /** IP > Firewall > NAT. */
+    natRules?: Array<{ chain: 'srcnat'; action: 'masquerade'; outInterface: string }>;
+    /** IP > Firewall > Filter Rules. */
+    filterRules?: Array<{
+      chain: 'forward';
+      action: 'drop' | 'accept';
+      srcAddress?: string;
+      dstAddress?: string;
+      inInterface?: string;
+      outInterface?: string;
+    }>;
+    /** PPP > Secrets dan PPPoE Servers. */
+    pppSecrets?: Array<{ name: string; password: string; profile?: string; service: 'pppoe' }>;
+    pppoeServers?: Array<{ interface: string; serviceName: string; defaultProfile?: string }>;
+    /** IP > Hotspot. */
+    hotspots?: Array<{ interface: string; pool?: string; profile?: string; users: Array<{ username: string; password: string }> }>;
   };
 }
 
@@ -299,4 +337,8 @@ export interface DiagnosticIssue {
   cause?: string;              // Gejala & Penyebab
   solution?: string;           // Langkah Solusi untuk Teknisi
   category?: 'optical' | 'ip' | 'physical' | 'configuration' | 'topology';
+  /** Nomor baris aturan di aturan-validator-simulator.md (mis. '5.3.2', 'P6'). */
+  ruleRef?: string;
+  /** Lapisan tempat kegagalan terjadi, mengikuti urutan pengecekan bawah ke atas. */
+  layer?: 'physical' | 'layer2' | 'ip' | 'route' | 'nat' | 'service';
 }

@@ -71,7 +71,16 @@ function duplicateIps(nodes) {
 
 // The engine also wants optical results; an empty map means every ONT reports
 // LOS, which is noise here but does not touch the IP check.
-const conflictIps = (nodes, cables = []) => {
+// Aturan P3: bentrok IP hanya dihitung dalam satu domain Layer 2. Helper ini
+// menaruh semua node pada satu switch yang sama (satu segmen broadcast), kecuali
+// pemanggil memberi kabel sendiri.
+const sameSegment = (nodes) => {
+  const hub = { id: 'hub', type: 'switch', name: 'hub', label: '', x: 0, y: 0, status: 'online', poweredOn: true, ports: [] };
+  const cables = nodes.map((n) => ({ id: `c-${n.id}`, type: 'lan', fromNodeId: n.id, toNodeId: 'hub', status: 'active', lengthKm: 0.01, attenuationDb: 0.02 }));
+  return { nodes: [...nodes, hub], cables };
+};
+const conflictIps = (nodes, cables) => {
+  if (!cables) ({ nodes, cables } = sameSegment(nodes));
   const issues = runNetworkDiagnostics(nodes, cables, new Map());
   return issues
     .filter((i) => i.id.startsWith('ip-conflict-'))
@@ -222,7 +231,7 @@ eq('two statics on one address are reported', conflictIps([withIp('192.168.1.5')
   eq('two DHCP-mode routers on one address are reported', conflictIps([r1, r2]), ['192.168.88.115']);
   eq('a static/dhcp pair on one address is reported', conflictIps([r1, node({ type: 'pc', ipConfig: { mode: 'static', ip: '192.168.88.115' } })]), ['192.168.88.115']);
   ok('the issue names both devices', (() => {
-    const issue = runNetworkDiagnostics([r1, r2], [], new Map()).find((i) => i.id === 'ip-conflict-192.168.88.115');
+    const issue = (({ nodes: nn, cables: cc }) => runNetworkDiagnostics(nn, cc, new Map()))(sameSegment([r1, r2])).find((i) => i.id === 'ip-conflict-192.168.88.115');
     return issue.severity === 'critical' &&
       issue.title.includes('Wi-Fi Wireless Router 1') &&
       issue.title.includes('Wi-Fi Wireless Router 2');

@@ -33,6 +33,8 @@
 
 import type { CableConnection, NetworkNode } from '../types/network';
 import { checkInternetAccess, type InternetAccessStatus } from './ipUtils';
+import { validateTopology } from './topologyValidator';
+import { isClient } from '../rules/common';
 
 /**
  * Status for an id that is not in the map.
@@ -72,8 +74,19 @@ export function buildInternetAccessMap(
   cables: readonly CableConnection[],
 ): InternetAccessLookup {
   const map = new Map<string, InternetAccessStatus>();
+  // Validator terpusat dihitung sekali per perubahan topologi. Ia hanya boleh
+  // menurunkan status (menambah deteksi aturan baru, mis. route/NAT MikroTik
+  // terstruktur, VLAN putus, LOS) dan menyediakan alasannya; status "normal"
+  // dari pengecekan lama tidak dinaikkan.
+  const validated = validateTopology(nodes, cables);
   for (const node of nodes) {
-    map.set(node.id, checkInternetAccess(node, nodes, cables));
+    const legacy = checkInternetAccess(node, nodes, cables);
+    const v = validated.resultByNode.get(node.id);
+    if (legacy.hasInternet && v && isClient(node) && v.status !== 'internet_normal') {
+      map.set(node.id, { ...legacy, hasInternet: false, reason: v.reason });
+    } else {
+      map.set(node.id, legacy);
+    }
   }
   return {
     get size() {

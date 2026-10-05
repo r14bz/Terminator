@@ -196,10 +196,17 @@ ok('ONT/MikroTik tidak otomatis DHCP', !DHCP_CLIENT_TYPES.includes('ont') && !DH
   );
   eq('DHCP server mati -> IP kosong', off[1].ipConfig.ip, '');
   const bridge = autoAssignDhcpLeases(
+    [mkOnt('ont', { ontConfig: { wanMode: 'bridge', dhcpServerEnabled: false } }), mkClient('pc')],
+    [cable('pc', 'ont')],
+  );
+  eq('ONT bridge, DHCP ONT mati -> IP kosong', bridge[1].ipConfig.ip, '');
+  // Aturan 2.5: bridge tetapi DHCP ONT masih aktif -> client tetap mengambil IP dari ONT
+  // (itulah sebabnya validator menandainya sebagai kesalahan konfigurasi).
+  const bridgeDhcpOn = autoAssignDhcpLeases(
     [mkOnt('ont', { ontConfig: { wanMode: 'bridge' } }), mkClient('pc')],
     [cable('pc', 'ont')],
   );
-  eq('ONT bridge -> IP kosong', bridge[1].ipConfig.ip, '');
+  ok('ONT bridge + DHCP ONT aktif -> client dapat IP dari ONT (aturan 2.5)', bridgeDhcpOn[1].ipConfig.ip.startsWith('192.168.1.'));
 }
 
 {

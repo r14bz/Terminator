@@ -72,7 +72,10 @@ export function autoAssignDhcpLeases(
       : [];
 
     if (!candidates.length) {
-      if (node.ipConfig.ip && node.ipConfig.gateway) continue;
+      // Server DHCP sengaja dimatikan: lease dicabut. Server yang hanya sedang
+      // Power Off: client mempertahankan lease terakhir sampai masa sewanya habis.
+      const serverIsOff = !!domain && working.some(n => domain.has(n.id) && n.id !== node.id && !n.poweredOn && dhcpEnabled(n));
+      if (serverIsOff && node.ipConfig.ip) continue;
       const next = { ...node, ipConfig: { ...node.ipConfig, mode: 'dhcp' as const, ip: '' } };
       if (next.ipConfig.ip !== node.ipConfig.ip) { working[i] = next; changed = true; }
       continue;
