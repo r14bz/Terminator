@@ -439,48 +439,59 @@ export function statusHandler(_req: any, res: any) {
         });
       }
 
-      // Format topology context into system instruction
+      // Format topology context into system instruction.
+      // Daftar dirakit dengan loop biasa (bukan template bersarang) agar aman di semua parser TypeScript.
       let contextBrief = '';
       if (context) {
-        contextBrief = `
-KONTEN TOPOLOGI JARINGAN SAAT INI DARI KANVAS TERMINATOR:
-- Ringkasan: ${context.summary || 'Topologi aktif pengguna'}
-- Jumlah Node Perangkat: ${context.nodesCount ?? (context.nodes ? context.nodes.length : 'N/A')}
-- Jumlah Kabel: ${context.cablesCount ?? (context.cables ? context.cables.length : 'N/A')}
-`;
+        const summary = context.summary || 'Topologi aktif pengguna';
+        const nodesCount = context.nodesCount ?? (context.nodes ? context.nodes.length : 'N/A');
+        const cablesCount = context.cablesCount ?? (context.cables ? context.cables.length : 'N/A');
+        contextBrief =
+          '\nKONTEN TOPOLOGI JARINGAN SAAT INI DARI KANVAS TERMINATOR:\n' +
+          '- Ringkasan: ' + summary + '\n' +
+          '- Jumlah Node Perangkat: ' + nodesCount + '\n' +
+          '- Jumlah Kabel: ' + cablesCount + '\n';
+
         if (context.issues && context.issues.length > 0) {
-          contextBrief += `- Masalah Diagnosa Terdeteksi (${context.issues.length} issue):
-${context.issues
-  .map(
-    (iss: any, idx: number) =>
-      `  ${idx + 1}. [${iss.severity?.toUpperCase() || 'INFO'}] ${iss.title} (${iss.category}): Penyebab: "${iss.cause}", Solusi saran: "${iss.solution}"`
-  )
-  .join('\n')}
-`;
+          const issueLines: string[] = [];
+          context.issues.forEach((iss: any, idx: number) => {
+            const sev = iss.severity ? String(iss.severity).toUpperCase() : 'INFO';
+            issueLines.push(
+              '  ' + (idx + 1) + '. [' + sev + '] ' + iss.title + ' (' + iss.category + '): Penyebab: "' +
+                iss.cause + '", Solusi saran: "' + iss.solution + '"'
+            );
+          });
+          contextBrief +=
+            '- Masalah Diagnosa Terdeteksi (' + context.issues.length + ' issue):\n' + issueLines.join('\n') + '\n';
         } else {
-          contextBrief += `- Status Diagnosa: Tidak ada masalah kritis atau peringatan terdeteksi (Kondisi Optimal).\n`;
+          contextBrief += '- Status Diagnosa: Tidak ada masalah kritis atau peringatan terdeteksi (Kondisi Optimal).\n';
         }
 
         if (context.selectedDevice) {
-          contextBrief += `- Perangkat yang sedang dipilih/diinspeksi pengguna: ${JSON.stringify(context.selectedDevice, null, 2)}\n`;
+          contextBrief +=
+            '- Perangkat yang sedang dipilih/diinspeksi pengguna: ' + JSON.stringify(context.selectedDevice, null, 2) + '\n';
         }
 
         if (context.nodes && Array.isArray(context.nodes)) {
-          contextBrief += `- Daftar Perangkat di Topologi:\n${context.nodes
-            .map(
-              (n: any) =>
-                `  • [ID: ${n.id}] Tipe: ${n.type}, Nama: "${n.name}", Model: "${n.model || '-'}", IP: ${n.ipConfig?.ip || 'N/A'}, Subnet: ${n.ipConfig?.subnet || 'N/A'}`
-            )
-            .join('\n')}\n`;
+          const nodeLines: string[] = [];
+          for (const n of context.nodes as any[]) {
+            nodeLines.push(
+              '  \u2022 [ID: ' + n.id + '] Tipe: ' + n.type + ', Nama: "' + n.name + '", Model: "' + (n.model || '-') +
+                '", IP: ' + (n.ipConfig?.ip || 'N/A') + ', Subnet: ' + (n.ipConfig?.subnet || 'N/A')
+            );
+          }
+          contextBrief += '- Daftar Perangkat di Topologi:\n' + nodeLines.join('\n') + '\n';
         }
 
         if (context.opticalStats && Array.isArray(context.opticalStats)) {
-          contextBrief += `- Data Redaman Optik (dBm):\n${context.opticalStats
-            .map(
-              (o: any) =>
-                `  • Node ${o.nodeName || o.nodeId}: Power Rx ${o.rxPowerDbm ?? '-'} dBm (Status: ${o.status || 'OK'})`
-            )
-            .join('\n')}\n`;
+          const opticalLines: string[] = [];
+          for (const o of context.opticalStats as any[]) {
+            opticalLines.push(
+              '  \u2022 Node ' + (o.nodeName || o.nodeId) + ': Power Rx ' + (o.rxPowerDbm ?? '-') +
+                ' dBm (Status: ' + (o.status || 'OK') + ')'
+            );
+          }
+          contextBrief += '- Data Redaman Optik (dBm):\n' + opticalLines.join('\n') + '\n';
         }
       }
 
@@ -650,14 +661,168 @@ ${contextBrief}`;
         });
       }
 
+      // Ringkasan disusun dulu sebagai variabel biasa supaya template prompt di bawah
+      // tidak berisi ekspresi bersarang multi-baris (parser TypeScript 7 di Vercel
+      // melaporkan "'}' expected" pada bentuk itu).
+      const nodesSummary = JSON.stringify(
+        (topology.nodes || []).map((n: any) => ({
+          id: n.id,
+          name: n.name,
+          type: n.type,
+          model: n.model,
+          ip: n.ipConfig?.ip,
+          gateway: n.ipConfig?.gateway,
+          ports: (n.ports || []).map((p: any) => p.name + ' (' + p.medium + ')'),
+        })),
+        null,
+        2
+      );
+      const cablesSummary = JSON.stringify(
+        (topology.cables || []).map((c: any) => ({
+          id: c.id,
+          type: c.type,
+          from: c.fromNodeId,
+          to: c.toNodeId,
+          lengthMeters: c.lengthMeters,
+          isBroken: c.isBroken,
+        })),
+        null,
+        2
+      );
+      const issuesSummary = JSON.stringify(topology.issues || [], null, 2);
+      const opticalSummary = JSON.stringify(topology.opticalResults || {}, null, 2);
+      const focusLine = focusNodeId ? '- Fokus Spesifik pada Node ID: ' + focusNodeId : '';
+      const queryLine = userQuery ? '- Pertanyaan Tambahan Teknisi: "' + userQuery + '"' : '';
+
       const prompt = `Lakukan audit dan diagnosa jaringan mendalam secara komprehensif terhadap topologi berikut:
 
 DATA TOPOLOGI:
 - Total Node: ${topology.nodes?.length || 0}
 - Total Kabel: ${topology.cables?.length || 0}
-- Perangkat Terdaftar: ${JSON.stringify(
-        (topology.nodes || []).map((n: any) => ({
-          id: n.id,
-          name: n.name,
-          type: n.type,
-          m
+- Perangkat Terdaftar: ${nodesSummary}
+- Kabel Terpasang: ${cablesSummary}
+- Masalah Otomatis Ditemukan Simulator: ${issuesSummary}
+- Hasil Redaman Optik (dBm): ${opticalSummary}
+${focusLine}
+${queryLine}
+
+INSTRUKSI FORMAT LAPORAN DIAGNOSA AI:
+1. **Ringkasan Kesehatan Topologi (Health Score 0-100% & Status Singkat)**
+2. **Analisa Masalah Kritis & Potensi Kegagalan (Akar Masalah Fisik / Logikal)**
+3. **Audit Kepatuhan Standar (ITU-T G.984 untuk PON, Subnetting IP, VLAN)**
+4. **Langkah Perbaikan Bertahap (Action Plan dengan Skrip / Perintah CLI MikroTik / Vendor)**
+5. **Rekomendasi Skalabilitas & Redundansi Jaringan ke Depan**
+
+Gunakan gaya bahasa teknisi senior yang praktis, jelas, dan siap diterapkan di lapangan.`;
+
+      const systemInstruction =
+        'Anda adalah Auditor Senior Jaringan Telekomunikasi & ISP FTTH. Analisa topologi dengan ketelitian tinggi dan berikan rekomendasi teknis terbaik.';
+
+      if (cfg.isOpenrouter || cfg.isOpencode) {
+        try {
+          const result = await callOpenAICompatibleChat({
+            messages: [{ role: 'user', content: prompt }],
+            systemInstruction,
+            config: cfg,
+          });
+          return res.json({
+            report: result.reply,
+            sources: [],
+            provider: cfg.provider,
+            providerName: cfg.providerName,
+            model: result.usedModel || cfg.activeModel,
+          });
+        } catch (apiErr: any) {
+          console.log(`${cfg.providerName} diagnose attempt notice:`, apiErr.message);
+          if (cfg.geminiApiKey) {
+            console.log('Falling back to Google Gemini for diagnose...');
+            try {
+              const response = await generateWithGeminiFallback({
+                contents: prompt,
+                config: {
+                  systemInstruction,
+                  tools: [{ googleSearch: {} }],
+                },
+              });
+              const rawChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+              const sources: Array<{ title: string; uri: string }> = [];
+              for (const chunk of rawChunks) {
+                if (chunk.web?.uri) {
+                  sources.push({
+                    title: chunk.web.title || chunk.web.uri,
+                    uri: chunk.web.uri,
+                  });
+                }
+              }
+              const notice = `> ⚠️ **Info Provider (${cfg.providerName})**: ${apiErr.message}\n> *Audit topologi otomatis dialihkan menggunakan model Google Gemini:*\n\n`;
+              return res.json({
+                report: notice + (response.text || 'Tidak dapat membuat laporan diagnosa.'),
+                sources,
+                provider: 'gemini',
+                providerName: 'Google Gemini',
+                model: 'gemini-3.8-flash',
+              });
+            } catch (geminiErr: any) {
+              console.log('Gemini diagnose fallback notice:', geminiErr?.message);
+              // Fall through to offline report generator
+            }
+          }
+          const offlineReport = generateOfflineExpertResponse({
+            topology,
+            isDiagnose: true,
+            causeNotice: `${cfg.providerName}: ${apiErr.message}. Menampilkan laporan audit otomatis offline simulator:`,
+          });
+          return res.json({
+            report: offlineReport,
+            sources: [],
+            provider: cfg.provider,
+            providerName: cfg.providerName,
+            model: cfg.activeModel,
+          });
+        }
+      }
+
+      const response = await generateWithGeminiFallback({
+        contents: prompt,
+        config: {
+          systemInstruction,
+          tools: [{ googleSearch: {} }],
+        },
+      });
+
+      const report = response.text || 'Tidak dapat membuat laporan diagnosa.';
+      const rawChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const sources: Array<{ title: string; uri: string }> = [];
+
+      for (const chunk of rawChunks) {
+        if (chunk.web?.uri) {
+          sources.push({
+            title: chunk.web.title || chunk.web.uri,
+            uri: chunk.web.uri,
+          });
+        }
+      }
+
+      res.json({
+        report,
+        sources,
+      });
+    } catch (err: any) {
+      console.log('Serving offline report in /api/ai/diagnose:', err?.message || err);
+      const isQuotaErr =
+        err?.message?.includes('429') ||
+        err?.message?.includes('quota') ||
+        err?.message?.includes('RESOURCE_EXHAUSTED');
+      const offlineReport = generateOfflineExpertResponse({
+        topology: req.body?.topology,
+        isDiagnose: true,
+        causeNotice: isQuotaErr
+          ? 'Batas kuota API (Rate Limit / Quota) pada penyedia cloud saat ini tercapai. Laporan audit topologi di bawah disajikan oleh Mesin Diagnosa Terintegrasi Simulator.'
+          : `Layanan AI eksternal sedang mengalami kendala. Laporan audit di bawah dianalisis oleh Mesin Diagnosa Jaringan Simulator.`,
+      });
+      res.json({
+        report: offlineReport,
+        sources: [],
+      });
+    }
+  }
