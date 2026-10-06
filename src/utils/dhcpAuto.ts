@@ -1,6 +1,6 @@
 import type { CableConnection, NetworkNode, NodeType } from '../types/network';
 import { isSameSubnet, isValidIpv4 } from './ipUtils';
-import { l2Domains, dhcpEnabled } from '../rules/common';
+import { l2Domains, dhcpEnabled, dhcpServesDomain } from '../rules/common';
 import {
   dhcpPoolOf,
   firstFreeHost,
@@ -67,7 +67,7 @@ export function autoAssignDhcpLeases(
     const domain = domains.find(d => d.has(node.id));
     const candidates = domain
       ? working
-          .filter(n => domain.has(n.id) && n.id !== node.id && n.poweredOn && dhcpEnabled(n))
+          .filter(n => domain.has(n.id) && n.id !== node.id && n.poweredOn && dhcpEnabled(n) && dhcpServesDomain(n, domain, cables))
           .sort((a, b) => a.id.localeCompare(b.id))
       : [];
 

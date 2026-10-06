@@ -6,8 +6,37 @@ export function issue(partial: Omit<DiagnosticIssue,'severity'> & {severity?:Dia
 export function activeCable(c:CableConnection){return c.status!=='broken'&&c.status!=='mismatch';}
 export function neighbors(id:string,nodes:readonly NetworkNode[],cables:readonly CableConnection[]){const r:NetworkNode[]=[];for(const c of cables){if(!activeCable(c))continue;const oid=c.fromNodeId===id?c.toNodeId:c.toNodeId===id?c.fromNodeId:null;if(oid){const n=nodes.find(x=>x.id===oid);if(n)r.push(n)}}return r;}
 function nodeVlan(n:NetworkNode){return n.vlanConfig?.enabled?n.vlanConfig.vlanId:undefined;}
-export function sameL2Domain(a:NetworkNode,b:NetworkNode,c:CableConnection){if(c.type==='wireless')return true;const va=nodeVlan(a),vb=nodeVlan(b);if(va===undefined&&vb===undefined)return true;if(va!==undefined&&vb!==undefined){if(a.vlanConfig?.mode==='access'&&b.vlanConfig?.mode==='access')return va===vb;if(a.vlanConfig?.mode==='access'&&b.vlanConfig?.mode==='trunk')return (b.vlanConfig.allowedVlans??[]).includes(va);if(b.vlanConfig?.mode==='access'&&a.vlanConfig?.mode==='trunk')return (a.vlanConfig.allowedVlans??[]).includes(vb);if(a.vlanConfig?.mode==='trunk'&&b.vlanConfig?.mode==='trunk'){const aa=a.vlanConfig.allowedVlans??[],bb=b.vlanConfig.allowedVlans??[];return aa.some(v=>bb.includes(v));}}return false;}
+/** Daftar VLAN yang diizinkan pada port trunk; undefined bila node bukan trunk. */
+function trunkAllowed(n:NetworkNode){return n.vlanConfig?.enabled&&n.vlanConfig.mode==='trunk'?(n.vlanConfig.allowedVlans??[]):undefined;}
+/** VLAN yang dilayani MikroTik terstruktur lewat interface VLAN-nya (IP > Addresses / DHCP terikat ke interface itu). */
+function mikrotikVlans(n:NetworkNode){return n.type==='mikrotik'&&Array.isArray(n.mikrotikConfig?.interfaces)?n.mikrotikConfig!.interfaces!.filter(i=>i.type==='vlan'&&i.vlanId!==undefined).map(i=>i.vlanId as number):[];}
+export function sameL2Domain(a:NetworkNode,b:NetworkNode,c:CableConnection){if(c.type==='wireless')return true;const va=nodeVlan(a),vb=nodeVlan(b);if(va===undefined&&vb===undefined)return true;if(va!==undefined&&vb!==undefined){if(a.vlanConfig?.mode==='access'&&b.vlanConfig?.mode==='access')return va===vb;if(a.vlanConfig?.mode==='access'&&b.vlanConfig?.mode==='trunk')return (b.vlanConfig.allowedVlans??[]).includes(va);if(b.vlanConfig?.mode==='access'&&a.vlanConfig?.mode==='trunk')return (a.vlanConfig.allowedVlans??[]).includes(vb);if(a.vlanConfig?.mode==='trunk'&&b.vlanConfig?.mode==='trunk'){const aa=a.vlanConfig.allowedVlans??[],bb=b.vlanConfig.allowedVlans??[];return aa.some(v=>bb.includes(v));}}
+  // Trunk ke MikroTik terstruktur yang punya interface VLAN: sambung bila ada VLAN yang diizinkan trunk dan dilayani MikroTik (aturan 3.3, 3.7).
+  const ta=trunkAllowed(a),tb=trunkAllowed(b);if(ta&&vb===undefined&&mikrotikVlans(b).some(v=>ta.includes(v)))return true;if(tb&&va===undefined&&mikrotikVlans(a).some(v=>tb.includes(v)))return true;
+  return false;}
 export function l2Domains(nodes:readonly NetworkNode[],cables:readonly CableConnection[]){const domains:Set<string>[]=[];const seen=new Set<string>();for(const node of nodes){if(seen.has(node.id))continue;const d=new Set<string>([node.id]);const q=[node.id];while(q.length){const id=q.shift()!;const current=nodes.find(n=>n.id===id);if(current&&current.type!=='ont'&&isRouter(current)&&!isBridgedAp(current,nodes))continue;for(const c of cables){if(!activeCable(c)||!carriesL2(c,nodes)||(c.fromNodeId!==id&&c.toNodeId!==id))continue;const oid=c.fromNodeId===id?c.toNodeId:c.fromNodeId;const a=nodes.find(n=>n.id===id),b=nodes.find(n=>n.id===oid);if(!a||!b||!sameL2Domain(a,b,c)||d.has(oid))continue;d.add(oid);q.push(oid)}}for(const id of d)seen.add(id);domains.push(d)}return domains;}
+
+/**
+ * Apakah DHCP server `n` benar-benar melayani domain Layer 2 `domain`?
+ * Router (MikroTik, router umum) hanya melayani domain di sisi LAN-nya. Kalau router
+ * tersambung ke domain itu lewat port WAN/uplink-nya (mis. ONT ISP yang DHCP-nya aktif
+ * dicolok ke ether1 MikroTik), DHCP router itu melayani segmen LAN yang berbeda, jadi
+ * tidak dihitung sebagai DHCP ganda di domain tersebut (aturan 2.4, 4A.10).
+ * Port yang tidak punya nama (data lama) dianggap sisi LAN, sehingga perilaku lama tetap.
+ */
+export function dhcpServesDomain(n:NetworkNode,domain:ReadonlySet<string>,cables:readonly CableConnection[]):boolean{
+  if(n.type!=='router'&&n.type!=='mikrotik')return true;
+  const links=cables.filter(c=>activeCable(c)&&(c.fromNodeId===n.id||c.toNodeId===n.id)&&domain.has(c.fromNodeId===n.id?c.toNodeId:c.fromNodeId));
+  if(!links.length)return true;
+  const uplink=n.mikrotikConfig?.uplinkInterface;
+  const isWan=(c:CableConnection)=>{
+    const portId=c.fromNodeId===n.id?c.fromPortId:c.toPortId;
+    const port=n.ports.find(p=>p.id===portId||p.connectedCableId===c.id||p.connectedCableIds?.includes(c.id));
+    if(!port)return false;
+    return /wan/i.test(port.name)||(!!uplink&&port.name.split(/\s+/)[0]===uplink);
+  };
+  return !links.every(isWan);
+}
 
 /**
  * Kabel yang meneruskan Layer 2: LAN dan wireless, plus fiber yang berujung di

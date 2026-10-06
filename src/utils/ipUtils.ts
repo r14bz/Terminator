@@ -128,6 +128,16 @@ export function findRouterConnectedToBridge(
           return currentNode;
         }
       }
+      // Aturan 2.1: ONT lain yang online (mode router/PPPoE, sinyal optik normal) di belakang
+      // bridge menjadi gateway Layer 3 yang sebenarnya, jadi client mendapat internet darinya.
+      if (
+        currentNode.type === 'ont' &&
+        currentNode.poweredOn &&
+        currentNode.ontConfig?.wanMode !== 'bridge' &&
+        !(currentNode.ontConfig?.ponStatus ?? '').toUpperCase().startsWith('LOS')
+      ) {
+        return currentNode;
+      }
       // Only traverse through Layer 1 / Layer 2 transparent bridge devices
       if (!['switch', 'switch_managed', 'ap_ptp', 'htb'].includes(currentNode.type)) {
         continue;

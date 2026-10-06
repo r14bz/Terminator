@@ -1,9 +1,9 @@
 import type { CableConnection, DiagnosticIssue, NetworkNode } from '../types/network';
 import {
   validateDhcpRules, validateEndpointRules, validateIpRules, validateLayer2Rules,
-  validateMikrotikRules, validateOntRules, validatePhysicalRules, validateRouterRules, evaluatePppoe,
+  validateMikrotikRules, validateOntRules, validatePhysicalRules, validateRouterRules, validateWirelessRules, evaluatePppoe,
 } from '../rules';
-import { dhcpEnabled, isClient, isStructuredMikrotik, l2Domains, vlanPath } from '../rules/common';
+import { dhcpEnabled, dhcpServesDomain, isClient, isStructuredMikrotik, l2Domains, vlanPath } from '../rules/common';
 import type { RuleContext } from '../rules/types';
 import { checkInternetAccess, findUpstreamGateway } from './ipUtils';
 
@@ -33,8 +33,15 @@ export interface TopologyValidationResult {
 /** Aturan yang belum bisa dievaluasi karena modelnya belum ada. Bukan masalah topologi. */
 export const PENDING_RULES: readonly string[] = [
   '4A.7 dan 4A.8: static route antar-router (belum ada tabel route untuk router umum/ONT).',
-  '4B.x (access point) dan 4C.x (mesh): konfigurasi per-SSID, band, kanal, dan peran mesh belum dimodelkan.',
-  '5.5.2: status login voucher hotspot (belum ada field status login client).',
+  '4B.5 dan 4C.6: mode router vs AP/bridge pada access point dan node utama mesh belum dimodelkan.',
+  '4B.6 sampai 4B.8: password WiFi, jangkauan sinyal, dan band per client belum dimodelkan.',
+  '4B.11: tumpang tindih kanal butuh posisi/jarak antar-AP.',
+  '4C.3, 4C.4, 4C.7: kecepatan backhaul per hop dan sistem/merek mesh (EasyMesh) belum dimodelkan.',
+  '3.8: router di port access (hanya satu VLAN yang punya gateway) belum dievaluasi.',
+  '4A.6: router umum belum punya pengaturan NAT di model data; NAT hanya dievaluasi untuk MikroTik (5.3.2).',
+  '4A.5: router umum tanpa default route masih dianggap punya internet (celah yang ditemukan saat uji); hanya MikroTik yang dicek (5.2.2).',
+  '5.3.4: koneksi masuk dari luar ke IP lokal tanpa port forward belum dimodelkan.',
+  '5.5.1 dan 5.5.2: status login voucher hotspot (belum ada field status login client).',
   '6.x per-SSID: mode WAN dan DHCP per SSID pada ONT belum dimodelkan (ONT baru punya satu set konfigurasi).',
 ];
 
@@ -70,6 +77,11 @@ function undefinedRulesFor(nodes: readonly NetworkNode[], ctx: RuleContext): str
 
 /** ONT ISP yang tersambung Layer 2 ke router: bila semuanya tanpa uplink optik, tidak ada internet (aturan 1.3, 6.4). */
 function upstreamOpticalBlocker(router: NetworkNode, ctx: RuleContext): NetworkNode | undefined {
+  const hasUplink = (o: NetworkNode) => o.ontConfig?.ponStatus !== 'LOS (No Signal)'
+    && ctx.cables.some((c) => c.status !== 'broken' && ['drop_core', 'distribusi', 'feeder'].includes(c.type) && (c.fromNodeId === o.id || c.toNodeId === o.id));
+  // Gateway-nya sendiri ONT (mis. client di belakang ONT bridge yang tersambung ke ONT online, aturan 2.1):
+  // yang menentukan hanya uplink optik ONT gateway itu, bukan ONT bridge di sisi client.
+  if (router.type === 'ont') return hasUplink(router) ? undefined : router;
   const onts: NetworkNode[] = [];
   const seen = new Set([router.id]);
   const q = [router.id];
@@ -88,8 +100,6 @@ function upstreamOpticalBlocker(router: NetworkNode, ctx: RuleContext): NetworkN
     }
   }
   if (!onts.length) return undefined;
-  const hasUplink = (o: NetworkNode) => o.ontConfig?.ponStatus !== 'LOS (No Signal)'
-    && ctx.cables.some((c) => c.status !== 'broken' && ['drop_core', 'distribusi', 'feeder'].includes(c.type) && (c.fromNodeId === o.id || c.toNodeId === o.id));
   return onts.every((o) => !hasUplink(o)) ? onts[0] : undefined;
 }
 
@@ -97,7 +107,7 @@ export function validateTopology(nodes: readonly NetworkNode[], cables: readonly
   const ctx: RuleContext = { nodes, cables };
   // Urutan mengikuti prinsip umum: fisik, layer 2, IP, route/NAT/layanan.
   const issues = dedupe([
-    ...validatePhysicalRules(ctx), ...validateLayer2Rules(ctx), ...validateIpRules(ctx), ...validateDhcpRules(ctx),
+    ...validatePhysicalRules(ctx), ...validateLayer2Rules(ctx), ...validateWirelessRules(ctx), ...validateIpRules(ctx), ...validateDhcpRules(ctx),
     ...validateEndpointRules(ctx), ...validateRouterRules(ctx), ...validateMikrotikRules(ctx), ...validateOntRules(ctx),
   ]);
 
@@ -142,12 +152,26 @@ export function validateTopology(nodes: readonly NetworkNode[], cables: readonly
       }
     }
 
+    // 2b. SSID access point bertag VLAN, tetapi uplink AP tidak meloloskan VLAN itu (4B.10).
+    const apBlocked = issues.find((i) => i.id.startsWith('ap-vlan-blocked-')
+      && cables.some((c) => (c.fromNodeId === n.id || c.toNodeId === n.id) && (c.fromNodeId === i.targetNodeId || c.toNodeId === i.targetNodeId)));
+    if (apBlocked) { put(n.id, 'connected_no_ip', `Tersambung ke WiFi, tetapi tidak dapat IP. ${fromIssue(apBlocked)}`, 'layer2', '4B.10'); continue; }
+
     // 3. IP / DHCP
     const domain = domains.find((d) => d.has(n.id));
-    const dhcpServers = nodes.filter((x) => domain?.has(x.id) && x.poweredOn && dhcpEnabled(x));
+    const dhcpServers = nodes.filter((x) => !!domain && domain.has(x.id) && x.poweredOn && dhcpEnabled(x) && dhcpServesDomain(x, domain, cables));
     if (n.ipConfig?.mode === 'dhcp' && dhcpServers.length === 0) {
       const why = own.find((i) => i.id.startsWith('dhcp-server-off-'));
       put(n.id, 'connected_no_ip', why ? fromIssue(why) : 'Tersambung, tetapi tidak dapat IP karena tidak ada DHCP server aktif di jaringan ini.', 'ip', '3.6'); continue;
+    }
+    // 5.1.3: client di VLAN tertentu, tetapi satu-satunya DHCP server adalah MikroTik yang tidak punya DHCP untuk VLAN itu.
+    if (n.ipConfig?.mode === 'dhcp' && vlan !== undefined && upstream && isStructuredMikrotik(upstream)
+      && dhcpServers.length > 0 && dhcpServers.every((s) => s.id === upstream.id)) {
+      const cfg = upstream.mikrotikConfig!;
+      const vlanOf = (name: string) => cfg.interfaces?.find((i) => i.name === name)?.vlanId;
+      if (!(cfg.dhcpServers ?? []).some((d) => vlanOf(d.interface) === vlan)) {
+        put(n.id, 'connected_no_ip', `Tersambung, tetapi tidak dapat IP karena ${upstream.name} tidak punya interface VLAN ${vlan} dengan DHCP server.`, 'ip', '5.1.3'); continue;
+      }
     }
     const mkIp = upstream && issues.find((i) => i.targetNodeId === upstream.id && i.id.startsWith('mikrotik-dhcp-no-ip-'));
     if (n.ipConfig?.mode === 'dhcp' && mkIp) { put(n.id, 'connected_no_ip', fromIssue(mkIp), 'ip', mkIp.ruleRef); continue; }
@@ -163,7 +187,14 @@ export function validateTopology(nodes: readonly NetworkNode[], cables: readonly
     if (!upstream || !upstream.poweredOn) {
       put(n.id, 'ip_no_internet', 'Tidak ada router atau ONT aktif di jaringan ini, jadi tidak ada jalur keluar ke internet.', 'route'); continue;
     }
-    const gatewayIssue = issues.find((i) => i.targetNodeId === upstream.id && i.category === 'configuration' && (i.layer === 'route' || i.layer === 'nat'));
+    // ONT pelanggan yang dial PPPoE ke MikroTik: masalah route/NAT di MikroTik itu ikut memutus internet client di belakang ONT (aturan 5.4.5).
+    const viaMikrotik = new Set<string>();
+    if (upstream.type === 'ont' && upstream.ontConfig?.pppoeTarget === 'mikrotik') {
+      const ontDomain = domains.find((d) => d.has(upstream.id));
+      for (const m of nodes) if (ontDomain?.has(m.id) && m.poweredOn && isStructuredMikrotik(m)) viaMikrotik.add(m.id);
+    }
+    const gatewayIssue = issues.find((i) => (i.targetNodeId === upstream.id || (!!i.targetNodeId && viaMikrotik.has(i.targetNodeId)))
+      && i.category === 'configuration' && (i.layer === 'route' || i.layer === 'nat'));
     if (gatewayIssue) { put(n.id, 'ip_no_internet', `Dapat IP, tetapi tidak ada internet. ${fromIssue(gatewayIssue)}`, gatewayIssue.layer, gatewayIssue.ruleRef); continue; }
 
     const blocker = upstreamOpticalBlocker(upstream, ctx);

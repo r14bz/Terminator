@@ -117,3 +117,13 @@ Dilengkapi dengan kalkulator redaman kabel optik riil (**Optical Power Budget & 
    - Hubungkan repositori GitHub Anda ke **Vercel** atau platform hosting pilihan Anda.
    - Tambahkan Environment Variables di dashboard hosting (`AI_PROVIDER`, `OPENROUTER_API_KEY`, atau `GEMINI_API_KEY`).
    - Selesai! Web simulator aktif secara online.
+
+## Aturan validator topologi
+
+Spesifikasi aturan ada di `docs/aturan-validator-simulator.md` dan menjadi sumber kebenaran validator
+(`src/rules/*`, `src/utils/topologyValidator.ts`). Jangan mengubah aturan di kode tanpa mengubah dokumen itu terlebih dahulu.
+
+- `npm test` menjalankan seluruh suite, termasuk `test:topology-rules`, `test:mikrotik-rules`, `test:wireless-rules`, dan `test:rule-outcomes`.
+- Nama setiap pengecekan di test memuat ID aturan dokumen (misalnya `4B.10`).
+- `npm run test:coverage` membandingkan semua ID aturan di dokumen dengan ID di kode dan test.
+  ID yang belum dievaluasi dicatat di `PENDING_RULES` (`src/utils/topologyValidator.ts`).

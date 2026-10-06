@@ -1,6 +1,6 @@
 import type { DiagnosticIssue, NetworkNode } from '../types/network';
 import type { RuleContext } from './types';
-import { issue, isSwitch } from './common';
+import { activeCable, isClient, issue, isSwitch } from './common';
 
 const vlanOf = (n: NetworkNode) => (n.vlanConfig?.enabled ? n.vlanConfig.vlanId : undefined);
 
@@ -10,7 +10,8 @@ function stpOn(n: NetworkNode): boolean {
 }
 
 /**
- * Lapisan 2: VLAN, trunk, STP. Aturan dokumen: 3.2, 3.4, 3.5, 4.2 sampai 4.6.
+ * Lapisan 2: VLAN, trunk, STP. Aturan dokumen: 3.2, 3.4, 3.5, 4.2 sampai 4.6,
+ * 4.4 (client di port trunk), 4B.10 (SSID AP bertag VLAN) dan 4B.12 (loop AP).
  */
 export function validateLayer2Rules(ctx: RuleContext): DiagnosticIssue[] {
   const out: DiagnosticIssue[] = [];
@@ -65,6 +66,65 @@ export function validateLayer2Rules(ctx: RuleContext): DiagnosticIssue[] {
         }));
       }
     }
+  }
+  // 4.4: client dicolok ke port trunk. Client tidak mengerti tag VLAN.
+  for (const n of ctx.nodes.filter((x) => isClient(x) && x.poweredOn)) {
+    const v = n.vlanConfig;
+    if (!v?.enabled || v.mode !== 'trunk') continue;
+    if (!ctx.cables.some((c) => activeCable(c) && (c.fromNodeId === n.id || c.toNodeId === n.id))) continue;
+    out.push(issue({
+      id: `client-on-trunk-${n.id}`, ruleRef: '4.4', layer: 'layer2', category: 'topology', targetNodeId: n.id,
+      title: `\"${n.name}\" dicolok ke port trunk`,
+      cause: `${n.name} tidak mengerti tag VLAN, jadi tidak tersambung ke VLAN bertag di port trunk.`,
+      solution: 'Ubah port tersebut menjadi access untuk VLAN yang diinginkan.',
+    }));
+  }
+
+  // 4B.10: SSID access point dipetakan ke VLAN, tetapi port uplink-nya access atau tidak mengizinkan VLAN itu.
+  for (const ap of ctx.nodes.filter((x) => x.type === 'access_point' && x.poweredOn && x.accessPointConfig?.vlanTagged && x.accessPointConfig.vlanId !== undefined)) {
+    const vlan = ap.accessPointConfig!.vlanId!;
+    for (const c of ctx.cables) {
+      if (c.type !== 'lan' || !activeCable(c) || (c.fromNodeId !== ap.id && c.toNodeId !== ap.id)) continue;
+      const other = ctx.nodes.find((x) => x.id === (c.fromNodeId === ap.id ? c.toNodeId : c.fromNodeId));
+      const v = other?.vlanConfig;
+      if (!other || !other.poweredOn || !v?.enabled) continue;
+      const blocked = v.mode === 'access' || !(v.allowedVlans ?? []).includes(vlan);
+      if (!blocked) continue;
+      out.push(issue({
+        id: `ap-vlan-blocked-${ap.id}-${c.id}`, ruleRef: '4B.10', layer: 'layer2', category: 'topology', targetNodeId: ap.id, targetCableId: c.id,
+        title: `VLAN ${vlan} SSID \"${ap.name}\" tidak lolos di ${other.name}`,
+        cause: `SSID ${ap.name} dipetakan ke VLAN ${vlan}, tetapi port ${other.name} berupa ${v.mode === 'access' ? 'access' : 'trunk yang tidak mengizinkan VLAN itu'}. Client tersambung ke WiFi tetapi tidak mendapat IP.`,
+        solution: `Jadikan port ${other.name} trunk dan izinkan VLAN ${vlan}.`,
+      }));
+    }
+  }
+
+  // 4B.12 dan loop yang lebih dari dua perangkat: kabel LAN antar switch/AP/mesh yang membentuk lingkaran tanpa STP atau LACP.
+  // Pasangan switch dengan kabel paralel sudah ditangani aturan 4.5 di atas.
+  const loopable = ctx.nodes.filter((n) => n.poweredOn && (isSwitch(n) || n.type === 'access_point' || n.type === 'mesh'));
+  const ids = new Set(loopable.map((n) => n.id));
+  const parent = new Map<string, string>(loopable.map((n) => [n.id, n.id]));
+  const find = (x: string): string => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x)!)!); x = parent.get(x)!; } return x; };
+  const cycleEdges: string[] = [];
+  for (const c of ctx.cables) {
+    if (c.type !== 'lan' || !activeCable(c) || !ids.has(c.fromNodeId) || !ids.has(c.toNodeId)) continue;
+    const ra = find(c.fromNodeId), rb = find(c.toNodeId);
+    if (ra === rb) cycleEdges.push(c.fromNodeId); else parent.set(ra, rb);
+  }
+  const cyclicRoots = new Set(cycleEdges.map(find));
+  for (const root of cyclicRoots) {
+    const members = loopable.filter((n) => find(n.id) === root);
+    if (members.length === 2 && members.every(isSwitch)) continue;
+    const protectedByStp = members.some((n) => isSwitch(n) && (stpOn(n) || n.managedSwitchConfig?.lacpTrunkEnabled));
+    if (protectedByStp) continue;
+    const names = members.map((n) => n.name).join(', ');
+    out.push(issue({
+      id: `l2cycle-${members.map((n) => n.id).sort().join('-')}`,
+      ruleRef: members.some((n) => !isSwitch(n)) ? '4B.12' : '4.5', layer: 'layer2', category: 'topology', targetNodeId: members[0].id,
+      title: `Loop Layer 2 antara ${names}`,
+      cause: `Kabel LAN antara ${names} membentuk lingkaran tanpa STP atau LACP. Broadcast akan berputar terus (broadcast storm) dan jaringan lumpuh.`,
+      solution: 'Lepas salah satu kabel yang membentuk lingkaran, atau aktifkan STP pada switch di dalam lingkaran itu.',
+    }));
   }
   return out;
 }

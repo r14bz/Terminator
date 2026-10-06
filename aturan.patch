@@ -1,0 +1,1112 @@
+diff -ruN -x node_modules -x .git a/README.md Terminator-main/README.md
+--- a/README.md	2026-10-05 03:53:37.000000000 +0000
++++ b/README.md	2026-10-06 03:15:59.253562356 +0000
+@@ -117,3 +117,13 @@
+    - Hubungkan repositori GitHub Anda ke **Vercel** atau platform hosting pilihan Anda.
+    - Tambahkan Environment Variables di dashboard hosting (`AI_PROVIDER`, `OPENROUTER_API_KEY`, atau `GEMINI_API_KEY`).
+    - Selesai! Web simulator aktif secara online.
++
++## Aturan validator topologi
++
++Spesifikasi aturan ada di `docs/aturan-validator-simulator.md` dan menjadi sumber kebenaran validator
++(`src/rules/*`, `src/utils/topologyValidator.ts`). Jangan mengubah aturan di kode tanpa mengubah dokumen itu terlebih dahulu.
++
++- `npm test` menjalankan seluruh suite, termasuk `test:topology-rules`, `test:mikrotik-rules`, `test:wireless-rules`, dan `test:rule-outcomes`.
++- Nama setiap pengecekan di test memuat ID aturan dokumen (misalnya `4B.10`).
++- `npm run test:coverage` membandingkan semua ID aturan di dokumen dengan ID di kode dan test.
++  ID yang belum dievaluasi dicatat di `PENDING_RULES` (`src/utils/topologyValidator.ts`).
+diff -ruN -x node_modules -x .git a/docs/aturan-validator-simulator.md Terminator-main/docs/aturan-validator-simulator.md
+--- a/docs/aturan-validator-simulator.md	1970-01-01 00:00:00.000000000 +0000
++++ b/docs/aturan-validator-simulator.md	2026-10-06 03:15:59.249562356 +0000
+@@ -0,0 +1,342 @@
++# Aturan Validator Simulator Topologi Jaringan
++
++Dokumen ini adalah spesifikasi aturan untuk simulator. Berikan ke AI sebagai dasar membuat validator dan test.
++
++## Instruksi untuk AI
++
++1. Implementasikan semua aturan di bawah sebagai **validator terpusat**, terpisah dari UI. Aturan per jenis perangkat disimpan di file terpisah (misalnya `rules/ont`, `rules/vlan`, `rules/mikrotik`, `rules/switch`), satu validator membaca semuanya.
++2. Setiap hasil simulasi **wajib menampilkan alasannya** dalam bahasa sederhana (contoh: "Tidak ada internet karena MikroTik belum punya aturan NAT").
++3. Buat **satu test per baris skenario**. Sertakan juga topologi valid yang harus lolos dan topologi tidak valid yang harus ditolak, termasuk kasus aneh (input kosong, port penuh, IP bentrok).
++4. Jangan mengarang aturan. Jika kondisi tidak tercakup di dokumen ini, tandai sebagai **"tidak terdefinisi"** dan tanyakan ke pengguna.
++5. Hasil acak (lihat aturan DHCP ganda) harus memakai **seed yang bisa dikunci**, atau test menerima semua hasil yang sah.
++6. Menambah perangkat baru tidak boleh merusak test perangkat lama.
++7. **Jangan menampilkan peringatan untuk hal yang normal.** Peringatan atau error hanya boleh muncul untuk kondisi yang secara eksplisit diatur sebagai masalah di dokumen ini. Jika ragu apakah sesuatu itu masalah, tandai "tidak terdefinisi" dan tanyakan, jangan langsung menolak topologinya.
++8. Setiap node harus punya **panel konfigurasi** seperti perangkat aslinya (lihat bagian 7). Validator membaca konfigurasi itu sebagai satu-satunya sumber kebenaran.
++9. **Dokumen ini adalah sumber kebenaran.** Jika kode yang sudah ada bertentangan dengan dokumen, **ubah kodenya, bukan dokumennya**. Dilarang mengubah, menyederhanakan, menggabungkan, atau menambah aturan atas inisiatif sendiri.
++10. **Jika menemukan konflik**, baik antara aturan di dokumen dan kode lama maupun antar aturan di dokumen, **berhenti dan laporkan** (sebutkan ID aturan dan letak konfliknya). Jangan menyelesaikannya sendiri. Pengguna yang memutuskan.
++11. **Dilarang mengubah, menghapus, atau melemahkan test supaya lulus.** Jika test gagal, perbaiki kodenya. Test hanya boleh berubah jika pengguna mengubah aturan di dokumen.
++12. **Beri ID pada test.** Nama test memuat ID aturan (misalnya `4A.7`). Buat skrip yang membandingkan semua ID di dokumen dengan ID di test, lalu melaporkan ID yang belum punya test.
++13. **Kerjakan bertahap**, satu bagian dokumen per sesi (misalnya bagian 3 tentang VLAN dulu), dan selesaikan sebelum pindah ke bagian berikutnya. Jangan mengimplementasikan seluruh dokumen sekaligus.
++14. **Laporan akhir tiap tahap:** daftar ID yang sudah diimplementasikan dan lulus, yang belum, dan yang tidak bisa diimplementasikan beserta alasannya. Jangan menyatakan selesai jika masih ada ID yang belum.
++
++## Prinsip umum
++
++**Urutan pengecekan, dari bawah ke atas.** Validator memeriksa berurutan, dan kegagalan di lapisan bawah menghentikan lapisan di atasnya:
++
++1. Fisik: kabel, optik (LOS)
++2. Layer 2: VLAN, trunk, STP
++3. IP: interface, DHCP
++4. Route
++5. NAT
++6. Layanan: PPPoE, hotspot
++
++**Empat status hasil yang harus dibedakan:**
++
++| Status | Arti |
++|---|---|
++| Tidak tersambung | Gagal di fisik atau layer 2 |
++| Tersambung, tidak dapat IP | DHCP tidak menjangkau client |
++| Dapat IP, tidak ada internet | Gagal di route, NAT, atau uplink |
++| Internet normal | Semua lapisan benar |
++
++**Aturan inti:**
++
++- Client punya internet hanya jika: (1) ada jalur sampai ke perangkat yang punya sumber internet, **dan** (2) IP-nya diberikan oleh DHCP yang berada di jalur menuju sumber tersebut.
++- Jika ada lebih dari satu DHCP server aktif dalam satu jaringan layer 2 yang sama, client mendapat IP **secara acak** dari salah satunya. Jika server itu tidak punya jalur ke internet, client kehilangan internet.
++- Jalur VLAN harus **tidak putus** dari ujung ke ujung. Satu titik yang tidak mengizinkan sebuah VLAN memutus VLAN itu.
++
++### Aturan alamat IP dan peringatan (hindari false positive)
++
++**Peringatan hanya boleh muncul untuk masalah nyata.** Alamat IP yang sama pada perangkat berbeda **normal** selama perangkat itu berada di **jaringan layer 2 yang terpisah**.
++
++- Pengecekan bentrok IP dilakukan **per domain layer 2** (satu segmen broadcast), bukan global di seluruh topologi.
++- Domain layer 2 terputus oleh: batas router, batas NAT, dan batas VLAN. ONT mode router memisahkan sisi LAN-nya dari sisi WAN-nya, jadi LAN tiap ONT adalah domain tersendiri.
++- Koneksi PON (OLT ke banyak ONT) **bukan LAN bersama**. IP LAN tiap ONT tidak perlu dibandingkan dengan ONT lain di OLT yang sama.
++- **Tidak ada daftar alamat IP "resmi"** untuk gateway. IP bawaan berbeda per merk (contoh: 192.168.1.1, 192.168.100.1, 192.168.0.1, 192.168.8.1, 10.0.0.1), dan semuanya valid.
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| P1 | Beberapa ONT router mode di satu OLT, gateway LAN sama (misalnya 192.168.1.1) | **Normal, tanpa peringatan.** Tiap LAN terisolasi di belakang NAT ONT-nya |
++| P2 | Gateway ONT 192.168.100.1 (atau IP bawaan merk lain) | **Valid, tanpa peringatan** |
++| P3 | Dua perangkat di domain layer 2 yang sama memakai IP yang sama | IP bentrok, peringatan |
++| P4 | LAN dua ONT dihubungkan kabel ke satu segmen layer 2 yang sama, dan kedua ONT memakai IP gateway yang sama | IP bentrok, peringatan |
++| P5 | Gateway berada di luar subnet interface-nya | Tidak valid |
++| P6 | Gateway sama dengan alamat jaringan atau alamat broadcast subnet | Tidak valid |
++| P7 | Dua interface pada satu router berada di subnet yang sama atau bertumpuk | Tidak valid (lihat 4A.3) |
++| P8 | Format IP bukan IPv4 yang sah (misalnya angka lebih dari 255) | Tidak valid |
++
++Tambahkan juga **test negatif**: topologi yang sah (P1 dan P2) harus **tidak** menghasilkan peringatan apa pun.
++
++## Topologi acuan (RT/RW net)
++
++```
++Internet > BRAS > OLT ISP > ONT ISP > MikroTik > (switch manageable, opsional)
++> OLT RT/RW > ONT RT/RW net (SSID 1 = VLAN 10, SSID 2 = VLAN 20) > client
++```
++
++Ada dua segmen optik yang terpisah:
++
++- **Segmen ISP:** OLT ISP ke ONT ISP
++- **Segmen RT/RW net:** OLT RT/RW ke ONT pelanggan
++
++## 1. Optik dan LOS
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 1.1 | Kabel optik ONT terhubung dan sinyal normal | Uplink ONT aktif |
++| 1.2 | Kabel optik ONT putus | LOS, ONT tidak punya uplink |
++| 1.3 | Fiber ISP putus (ONT ISP LOS) | Semua pelanggan RT/RW net tetap dapat IP dari perangkat lokal, tapi **tidak ada internet** |
++| 1.4 | Fiber antara OLT RT/RW dan satu ONT pelanggan putus | LOS **hanya untuk pelanggan itu**, pelanggan lain normal |
++
++## 2. ONT
++
++ONT punya dua mode untuk tiap koneksi WAN: **router (PPPoE)** atau **bridge**. Aturan DHCP bergantung pada mode ini.
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 2.1 | ONT tanpa optik disambung LAN ke ONT lain yang online, mode **bridge**, DHCP ONT mati | Client dapat IP dan internet dari ONT yang online |
++| 2.2 | Kasus 2.1, tapi DHCP ONT tanpa optik **aktif** | Client dapat IP dari ONT tanpa optik, **tidak ada internet** |
++| 2.3 | ONT tanpa optik, **bukan bridge**, DHCP aktif, disambung ke ONT online | ONT itu sendiri tidak punya internet. Client di ONT online bisa **acak** mendapat IP dari ONT ini dan kehilangan internet |
++| 2.4 | ONT mode router (PPPoE), DHCP aktif | Wajar. Client hanya melihat DHCP dari ONT-nya sendiri, tidak ada DHCP ganda |
++| 2.5 | WAN mode bridge, tapi DHCP ONT aktif untuk SSID yang memakai WAN itu | Client mengambil IP dari ONT, melewati MikroTik (termasuk voucher). Hasil salah |
++
++## 3. VLAN
++
++- **Access port:** satu port, satu VLAN, tanpa tag. Untuk perangkat biasa.
++- **Trunk port:** membawa banyak VLAN dengan tag. Daftar VLAN yang diizinkan harus diatur.
++- Perangkat di VLAN berbeda hanya bisa berkomunikasi lewat router atau switch layer 3.
++- Broadcast (termasuk DHCP) berhenti di batas VLAN-nya.
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 3.1 | Dua perangkat di VLAN yang sama pada switch yang sama | Bisa komunikasi |
++| 3.2 | Dua perangkat di VLAN berbeda, tanpa router | Tidak bisa komunikasi |
++| 3.3 | VLAN berbeda dengan router yang menangani routing antar-VLAN dan gateway benar | Bisa komunikasi lewat router |
++| 3.4 | Dua switch dihubungkan trunk yang mengizinkan VLAN 10, PC di VLAN 10 di kedua sisi | Bisa komunikasi |
++| 3.5 | Kasus 3.4, tapi trunk tidak mengizinkan VLAN 10 | Tidak bisa komunikasi |
++| 3.6 | Client di VLAN 10, DHCP server di VLAN 20, tanpa DHCP relay | Client tidak dapat IP |
++| 3.7 | Router terhubung ke switch lewat trunk dengan sub-interface per VLAN | Routing antar-VLAN jalan |
++| 3.8 | Router terhubung lewat port access (satu VLAN saja) | Hanya VLAN itu yang punya gateway |
++
++## 4. Switch manageable
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 4.1 | Dua port access di VLAN 10 | Bisa saling komunikasi |
++| 4.2 | Port access VLAN 10 dan VLAN 20, tanpa router | Tidak bisa saling komunikasi |
++| 4.3 | Port trunk ke MikroTik tidak mengizinkan VLAN 20 | VLAN 20 tidak sampai ke MikroTik |
++| 4.4 | PC dicolok ke port trunk (bukan access) | PC tidak mengerti tag, tidak tersambung ke VLAN bertag |
++| 4.5 | Dua kabel antar-switch yang sama, tanpa STP | Broadcast storm, jaringan lumpuh |
++| 4.6 | Kasus 4.5, tapi STP aktif | Satu jalur diblokir, jaringan normal |
++| 4.7 | Jalur utama putus, STP aktif | Jalur cadangan aktif otomatis |
++
++Fitur tambahan (opsional): port mirroring, link aggregation, rate limit, port security.
++
++## 4A. Router umum
++
++Router menghubungkan **dua jaringan atau lebih** yang berbeda subnet. Tiap interface router punya IP sendiri, dan IP itu menjadi **gateway** bagi client di jaringan tersebut.
++
++MikroTik adalah router dengan fitur tambahan (PPPoE server, hotspot, firewall lanjutan), jadi **aturan bagian ini juga berlaku untuk MikroTik**. ONT dalam mode router (PPPoE) juga berperilaku sebagai router, sedangkan ONT mode bridge bukan router. Di kode, jadikan MikroTik turunan dari node router.
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 4A.1 | Router punya interface di jaringan A dan B, gateway client mengarah ke IP router di jaringannya | Client A dan B bisa berkomunikasi lewat router |
++| 4A.2 | Gateway client kosong atau salah | Hanya bisa berkomunikasi di jaringan lokal, tidak ke jaringan lain atau internet |
++| 4A.3 | Dua interface router berada di subnet yang sama | Tidak valid, ditolak (subnet bertumpuk) |
++| 4A.4 | IP gateway sama dengan IP perangkat lain di jaringan itu | IP bentrok, hasil tidak stabil |
++| 4A.5 | Router tanpa default route | Jaringan yang terhubung langsung tetap bisa berkomunikasi, tapi tidak ada internet |
++| 4A.6 | Router di sisi WAN tanpa NAT | Client dapat IP, tapi tidak ada internet |
++| 4A.7 | Router A tersambung ke router B, router A tidak punya static route ke LAN B | Client LAN A tidak bisa menjangkau LAN B. Client LAN B tetap bisa ke internet lewat A jika default route dan NAT benar |
++| 4A.8 | Router A punya static route ke LAN B lewat router B | Client LAN A bisa menjangkau LAN B, selama router B tidak melakukan NAT di sisi yang menghadap A |
++| 4A.9 | Dua router dengan DHCP aktif di jaringan layer 2 yang sama | DHCP ganda, client mendapat IP acak (lihat prinsip umum) |
++| 4A.10 | Router di belakang router lain (NAT berlapis) | Internet tetap jalan, tapi koneksi dari luar ke perangkat di dalam tidak bisa tanpa port forward di tiap lapis |
++
++## 4B. Access point (AP)
++
++AP menghubungkan perangkat nirkabel ke jaringan kabel. Anggap AP sebagai **switch dengan WiFi**: bekerja di layer 2, tidak melakukan routing, dan secara normal tidak memberi IP. AP bersifat opsional dan bisa dipasang di belakang ONT RT/RW, router, atau switch.
++
++Hal yang diatur pada AP: SSID, password, band (2,4 GHz atau 5 GHz), kanal, dan (jika didukung) pemetaan SSID ke VLAN.
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 4B.1 | AP mode bridge/AP, kabel ke port LAN router, DHCP AP mati, DHCP router aktif | Client WiFi dapat IP dari router dan internet |
++| 4B.2 | AP tanpa uplink (kabel putus atau belum terpasang), DHCP AP mati | Client bisa tersambung ke WiFi, tapi tidak dapat IP |
++| 4B.3 | AP tanpa uplink, DHCP AP aktif | Client dapat IP dari AP, tapi tidak ada internet |
++| 4B.4 | DHCP AP aktif, kabel ke port LAN router yang DHCP-nya juga aktif | DHCP ganda, client mendapat IP acak dari salah satunya |
++| 4B.5 | AP mode router, kabel ke port LAN router utama | NAT berlapis. Client dapat internet, tapi berada di subnet terpisah |
++| 4B.6 | Password WiFi salah | Client tidak tersambung |
++| 4B.7 | Client di luar jangkauan sinyal | Client tidak tersambung. Sinyal lemah membuat koneksi lambat |
++| 4B.8 | Client hanya mendukung 2,4 GHz, SSID hanya tersedia di 5 GHz | Client tidak bisa melihat atau menyambung ke SSID itu |
++| 4B.9 | SSID dipetakan ke VLAN 20, port switch ke AP mengizinkan VLAN 20 (trunk) | Client SSID itu masuk VLAN 20 |
++| 4B.10 | SSID dipetakan ke VLAN 20, tapi port switch ke AP berupa access (atau tidak mengizinkan VLAN 20) | Client tersambung ke WiFi, tapi tidak dapat IP |
++| 4B.11 | Dua AP berdekatan memakai kanal yang saling tumpang tindih | Kecepatan turun, tapi masih tersambung |
++| 4B.12 | Dua AP atau lebih dihubungkan kabel membentuk loop, tanpa STP | Broadcast storm, jaringan lumpuh |
++
++## 4C. Mesh
++
++Mesh adalah beberapa node yang bekerja sebagai **satu jaringan dengan satu SSID**. Satu node (node utama, atau *root*) terhubung ke router atau ISP lewat kabel. Node lain (satelit) terhubung ke node utama lewat **backhaul**, yaitu nirkabel atau kabel.
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 4C.1 | Node utama terhubung ke router/ISP, satelit dalam jangkauan backhaul | Semua node satu jaringan, satu SSID. Client berpindah antar-node tanpa ganti jaringan |
++| 4C.2 | Satelit di luar jangkauan node mana pun | Satelit terputus dan tidak membentuk jaringan |
++| 4C.3 | Backhaul nirkabel memakai radio yang sama dengan client | Kecepatan turun di tiap lompatan (hop) |
++| 4C.4 | Backhaul memakai kabel, atau band khusus backhaul | Kecepatan lebih stabil dibanding backhaul nirkabel biasa |
++| 4C.5 | Node utama tanpa uplink | Client bisa tersambung ke mesh, tapi tidak ada internet |
++| 4C.6 | Node utama mode router di belakang router lain | NAT berlapis. Atur node utama ke mode AP/bridge untuk menghindarinya |
++| 4C.7 | Node dari sistem mesh yang berbeda | Tidak bisa bergabung, kecuali sama-sama mendukung standar yang sama (misalnya EasyMesh) |
++| 4C.8 | Satelit mesh, DHCP | DHCP hanya dijalankan node utama. Satelit tidak boleh menjalankan DHCP sendiri |
++
++Dukungan **VLAN per SSID pada mesh** bergantung pada perangkatnya. Jika tidak ditentukan pengguna, tandai sebagai "tidak terdefinisi" dan tanyakan.
++
++## 5. MikroTik
++
++Tiap fitur bergantung pada fitur di lapisan bawahnya.
++
++### 5.1 Interface, IP, dan DHCP
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 5.1.1 | Interface VLAN 20 punya IP dan DHCP server | Client dapat IP |
++| 5.1.2 | DHCP server dibuat, tapi interface tidak punya IP address | DHCP tidak jalan |
++| 5.1.3 | MikroTik tidak punya interface VLAN 20 | SSID 2 tidak dapat IP |
++
++### 5.2 Route
++
++- **Connected route** muncul otomatis untuk tiap interface yang punya IP.
++- **Default route** (`0.0.0.0/0`) mengarah ke ONT ISP. Tanpa ini, MikroTik tidak tahu jalur ke internet.
++- Gateway default route harus berada di jaringan yang sama dengan interface keluar.
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 5.2.1 | Ada default route ke ONT ISP, NAT benar | Internet jalan |
++| 5.2.2 | Tidak ada default route | Dapat IP, tidak ada internet |
++| 5.2.3 | Gateway default route di jaringan yang tidak sama dengan interface keluar | Route tidak aktif |
++| 5.2.4 | PC VLAN 10 ke PC VLAN 20 melalui MikroTik, tanpa aturan firewall | Tembus (connected route) |
++
++### 5.3 NAT
++
++NAT masquerade mengganti IP sumber paket keluar dengan IP interface keluar, lalu mencatat koneksi di tabel supaya balasan kembali ke client yang benar. NAT bisa berlapis (ONT RT/RW, MikroTik, ONT ISP) dan internet tetap jalan.
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 5.3.1 | Masquerade dipasang di interface keluar ke ONT ISP | Client punya internet |
++| 5.3.2 | Tidak ada aturan NAT | Dapat IP, tidak ada internet |
++| 5.3.3 | Masquerade dipasang di interface yang salah (misalnya VLAN client) | Dapat IP, tidak ada internet |
++| 5.3.4 | Koneksi dimulai dari luar ke IP lokal client tanpa port forward | Ditolak |
++
++### 5.4 PPPoE
++
++PPPoE membuat sesi login (username dan password) di atas Ethernet. Discovery memakai broadcast, sehingga **jalur layer 2 dari ONT sampai MikroTik harus utuh**.
++
++Ada dua sesi PPPoE yang terpisah:
++
++- ONT ISP ke BRAS (milik ISP)
++- ONT RT/RW net ke MikroTik (milik sendiri)
++
++Komponen PPPoE server di MikroTik: server (dipasang di satu interface), profile (aturan bersama), dan secret (satu akun per pelanggan).
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 5.4.1 | Jalur VLAN utuh, secret cocok, server aktif di interface yang benar | Sesi tersambung |
++| 5.4.2 | Username atau password salah | Gagal autentikasi. Client tetap dapat IP dari ONT, tapi tidak ada internet |
++| 5.4.3 | PPPoE server dipasang di interface yang salah | ONT tidak menemukan server |
++| 5.4.4 | VLAN WAN tidak diizinkan di OLT RT/RW | ONT tidak menemukan server |
++| 5.4.5 | Sesi tersambung, tapi NAT atau default route belum benar | ONT online, client tidak ada internet |
++
++### 5.5 Hotspot voucher
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 5.5.1 | Hotspot aktif di VLAN 20, client belum login | Hanya halaman login yang terbuka |
++| 5.5.2 | Hotspot aktif, client sudah login dengan voucher valid | Internet jalan |
++
++### 5.6 Firewall
++
++Pada konfigurasi pengguna, **VLAN 10 dan VLAN 20 diblok firewall satu sama lain** di MikroTik. Tanpa aturan blok, MikroTik otomatis menjadi jembatan antar-VLAN karena punya interface di keduanya.
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 5.6.1 | Ada aturan firewall yang memblokir VLAN 10 dan VLAN 20 | Client kedua VLAN tidak bisa saling komunikasi, tapi tetap bisa ke internet |
++| 5.6.2 | Aturan blok dihapus atau tidak ada | Client kedua VLAN bisa saling komunikasi |
++| 5.6.3 | Aturan blok dipasang terlalu luas (memblokir semua trafik forward) | Client kehilangan internet |
++
++## 6. Skenario gabungan RT/RW net
++
++**Konfigurasi nyata pengguna:**
++
++- SSID 1 (VLAN 10): mode router (PPPoE), DHCP ONT aktif.
++- SSID 2 (VLAN 20): mode **bridge ke MikroTik**. Terkonfirmasi: gateway client SSID 2 bukan IP ONT dan halaman login voucher (captive portal) muncul, sehingga DHCP dan hotspot voucher dijalankan oleh MikroTik. DHCP ONT tidak boleh melayani SSID 2.
++
++Simulator tetap menyediakan **mode WAN per SSID sebagai pengaturan yang bisa dipilih** (PPPoE atau bridge), supaya kedua desain bisa dibandingkan.
++
++| # | Kondisi | Hasil |
++|---|---|---|
++| 6.1 | PPPoE ONT ke MikroTik berhasil, VLAN WAN diizinkan di OLT RT/RW, optik ISP normal, DHCP ONT aktif | Client dapat IP dari ONT dan internet |
++| 6.2 | VLAN WAN tidak diizinkan di OLT RT/RW | PPPoE gagal. Client dapat IP dari ONT, tidak ada internet |
++| 6.3 | Username atau password PPPoE salah | Sama seperti 6.2 |
++| 6.4 | Fiber ISP putus | PPPoE ke MikroTik tetap tersambung, tidak ada internet |
++| 6.5 | Fiber ke satu ONT pelanggan putus | LOS hanya untuk pelanggan itu |
++| 6.6 | SSID 2 mode bridge ke hotspot MikroTik, DHCP ONT untuk SSID 2 mati, VLAN 20 utuh sampai MikroTik | Client dapat IP dari MikroTik, melihat halaman login voucher |
++| 6.7 | SSID 2 mode bridge, tapi DHCP ONT aktif untuk SSID 2 | Client dapat IP dari ONT dan melewati voucher |
++| 6.8 | Port LAN ONT atau OLT RT/RW tidak mengizinkan VLAN 20 | SSID 2 tidak dapat IP |
++| 6.9 | Client SSID 1 mencoba menghubungi client SSID 2 | Ditolak, karena firewall MikroTik memblokir VLAN 10 dan VLAN 20. Tembus hanya jika aturan blok dihapus |
++
++## 7. Konfigurasi per node (panel pengaturan)
++
++Tujuan: pengguna bisa melihat dan mengubah konfigurasi tiap node seperti di perangkat aslinya, sehingga simulator juga menjadi alat belajar membaca konfigurasi nyata.
++
++**Prinsip:**
++
++1. Tiap node punya **panel konfigurasi** yang strukturnya mengikuti perangkat asli: nama menu, istilah, dan urutan field dibuat semirip mungkin.
++2. Konfigurasi adalah **satu-satunya sumber kebenaran**. Validator hanya membaca dari konfigurasi ini, bukan dari data lain.
++3. Setiap perubahan field **memicu validasi ulang** dan menampilkan hasil beserta alasannya.
++4. Field punya **nilai bawaan** yang meniru perangkat umum, ditandai wajib atau opsional, dan divalidasi (format IP, VLAN ID 1 sampai 4094, password tidak kosong, dan seterusnya).
++5. Opsional: sediakan **tampilan ringkasan konfigurasi dalam bentuk teks** (mirip hasil export atau CLI) agar pengguna terbiasa membaca konfigurasi nyata.
++6. Nama field berbeda antar merk. Boleh disederhanakan, tapi jangan mengarang field yang tidak ada di perangkat nyata. Jika tidak yakin, tandai "tidak terdefinisi" dan tanyakan.
++
++**Field per node:**
++
++| Node | Kelompok | Field |
++|---|---|---|
++| **ONT** | Status | Status optik (terhubung atau LOS) |
++| | Koneksi WAN (bisa lebih dari satu) | Nama, mode (PPPoE/router atau bridge), VLAN ID WAN, username dan password PPPoE (jika PPPoE), binding ke SSID atau port LAN |
++| | LAN | IP gateway, subnet mask, DHCP server (aktif/mati, rentang IP, lease time) |
++| | WLAN (per SSID) | Nama SSID, aktif/mati, keamanan dan password, band, kanal, VLAN, WAN yang dipakai |
++| | Port LAN | Status, pemetaan VLAN per port |
++| **OLT** | PON | Status port PON, daftar ONU terdaftar (autentikasi lewat serial number atau MAC) |
++| | Profil layanan | VLAN yang dibawa tiap ONU, pemetaan VLAN per layanan |
++| | Uplink | Port uplink, mode trunk, VLAN yang diizinkan |
++| **Switch manageable** | Per port | Status, mode (access atau trunk), VLAN access (PVID), daftar VLAN yang diizinkan pada trunk |
++| | VLAN | Daftar VLAN (ID dan nama) |
++| | STP | Aktif/mati, prioritas |
++| | Opsional | Port mirroring, link aggregation, rate limit, port security |
++| **Router umum** | Interface | Nama, IP dan mask, status |
++| | DHCP | Per interface: aktif/mati, rentang IP, gateway, DNS |
++| | Route | Route statis (tujuan dan gateway), default route |
++| | NAT | Aktif/mati, interface keluar |
++| **MikroTik** (turunan router) | Interfaces | Port ether, interface VLAN (nama, VLAN ID, interface induk), bridge (opsional) |
++| | IP | Address (alamat dan interface), pool, DHCP server (interface, pool, network, gateway, DNS), routes |
++| | Firewall | NAT (chain, action masquerade, out-interface), filter rules (chain forward, sumber, tujuan, action drop atau accept) |
++| | PPP | Profile, secret (nama, password, profile, service pppoe), PPPoE server (interface, service name, default profile) |
++| | Hotspot | Interface, address pool, profile, user atau voucher (username, password, batas waktu) |
++| **Access point** | Umum | Mode (AP/bridge atau router), port uplink, DHCP (aktif/mati) |
++| | SSID | Nama, password, band, kanal, VLAN |
++| **Mesh** | Node | Peran (utama atau satelit), tipe backhaul (kabel atau nirkabel), mode (router atau AP/bridge), sistem mesh (untuk aturan 4C.7), SSID tunggal |
++| **BRAS** (opsional) | Layanan | Akun PPPoE pelanggan (username dan password), profil kecepatan, status internet upstream |
++| **Client** | IP | Mode (DHCP atau statis), IP, mask, gateway, DNS |
++| | WiFi | SSID tujuan dan password |
++
++Untuk MikroTik, susun menu mengikuti kelompok yang ada di RouterOS (Interfaces, IP, Firewall, PPP, Hotspot) agar pengguna terbiasa dengan strukturnya.
++
++**Alat uji pada client (disarankan):** sediakan pengecekan sederhana (mirip ping atau traceroute) yang menunjukkan **di lapisan mana koneksi gagal**: fisik, layer 2, IP/DHCP, route, atau NAT. Ini mendukung empat status hasil di bagian prinsip umum.
++
++## Keputusan yang sudah dikonfirmasi pengguna
++
++- ONT RT/RW net dial PPPoE ke MikroTik (MikroTik berperan sebagai PPPoE server).
++- VLAN 10 dan VLAN 20 diblok firewall satu sama lain.
++- Switch manageable bersifat opsional: sebagian topologi RT/RW net memakainya, sebagian tidak. Simulator harus mendukung kedua kasus, dan aturan switch (bagian 4) hanya berlaku jika switch ada di topologi.
++
++## Catatan verifikasi
++
++Aturan di dokumen ini disusun lewat diskusi dan **belum diuji di perangkat nyata**. Karena simulator dipakai untuk belajar, verifikasi tiap aturan lewat dokumentasi resmi (misalnya wiki MikroTik), Cisco Packet Tracer, GNS3, atau perangkat asli sebelum dipercaya.
+diff -ruN -x node_modules -x .git a/package.json Terminator-main/package.json
+--- a/package.json	2026-10-05 03:53:37.000000000 +0000
++++ b/package.json	2026-10-05 15:24:23.724235597 +0000
+@@ -10,7 +10,7 @@
+     "preview": "vite preview",
+     "clean": "rm -rf dist server.js",
+     "lint": "tsc --noEmit",
+-    "test": "npm run test:ip && npm run test:optical && npm run test:ping && npm run test:history && npm run test:history-wiring && npm run test:placement && npm run test:zoom && npm run test:internet-map && npm run test:internet-access && npm run test:ports && npm run test:ipalloc && npm run test:autofix && npm run test:compatibility && npm run test:bridge && npm run test:ai-service && npm run test:dhcp-auto && npm run test:topology-rules && npm run test:mikrotik-rules",
++    "test": "npm run test:ip && npm run test:optical && npm run test:ping && npm run test:history && npm run test:history-wiring && npm run test:placement && npm run test:zoom && npm run test:internet-map && npm run test:internet-access && npm run test:ports && npm run test:ipalloc && npm run test:autofix && npm run test:compatibility && npm run test:bridge && npm run test:ai-service && npm run test:dhcp-auto && npm run test:topology-rules && npm run test:mikrotik-rules && npm run test:wireless-rules && npm run test:rule-outcomes",
+     "test:dhcp-auto": "node --import ./scripts/ts-resolve.mjs scripts/verify-dhcp-auto.mjs",
+     "test:ai-service": "node --import ./scripts/ts-resolve.mjs scripts/verify-ai-service.mjs",
+     "test:bridge": "node --import ./scripts/ts-resolve.mjs scripts/verify-ont-bridge-htb.mjs",
+@@ -33,7 +33,10 @@
+     "test:internet-map": "node --import ./scripts/ts-resolve.mjs scripts/verify-internet-map.mjs",
+     "test:internet-access": "node --import ./scripts/ts-resolve.mjs scripts/verify-internet-access.mjs",
+     "test:topology-rules": "node --import ./scripts/ts-resolve.mjs scripts/verify-topology-rules.mjs",
+-    "test:mikrotik-rules": "node --import ./scripts/ts-resolve.mjs scripts/verify-mikrotik-rules.mjs"
++    "test:mikrotik-rules": "node --import ./scripts/ts-resolve.mjs scripts/verify-mikrotik-rules.mjs",
++    "test:wireless-rules": "node --import ./scripts/ts-resolve.mjs scripts/verify-wireless-rules.mjs",
++    "test:rule-outcomes": "node --import ./scripts/ts-resolve.mjs scripts/verify-rule-outcomes.mjs",
++    "test:coverage": "node --import ./scripts/ts-resolve.mjs scripts/verify-rule-coverage.mjs"
+   },
+   "dependencies": {
+     "@google/genai": "^2.4.0",
+diff -ruN -x node_modules -x .git a/scripts/verify-rule-coverage.mjs Terminator-main/scripts/verify-rule-coverage.mjs
+--- a/scripts/verify-rule-coverage.mjs	1970-01-01 00:00:00.000000000 +0000
++++ b/scripts/verify-rule-coverage.mjs	2026-10-06 03:14:32.923538484 +0000
+@@ -0,0 +1,59 @@
++/**
++ * Laporan cakupan aturan: membandingkan semua ID aturan di dokumen dengan ID yang
++ * dirujuk di kode (ruleRef) dan di test (scripts/verify-*.mjs).
++ *   npm run test:coverage            laporan saja
++ *   npm run test:coverage -- --strict  gagal jika ada ID yang tidak punya test dan tidak tercatat pending
++ * Dokumen: docs/aturan-validator-simulator.md
++ */
++import fs from 'node:fs';
++import path from 'node:path';
++import { PENDING_RULES } from '../src/utils/topologyValidator.ts';
++
++const root = path.resolve(import.meta.dirname, '..');
++const doc = fs.readFileSync(path.join(root, 'docs/aturan-validator-simulator.md'), 'utf8');
++const ids = [...new Set(doc.split('\n').map((l) => l.match(/^\| (P\d+|\d+[A-C]?(?:\.\d+)+) \|/)?.[1]).filter(Boolean))];
++
++const walk = (dir, ok) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
++  const p = path.join(dir, e.name);
++  return e.isDirectory() ? walk(p, ok) : ok(p) ? [p] : [];
++});
++const read = (files) => files.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
++const code = read(walk(path.join(root, 'src'), (p) => /\.tsx?$/.test(p)));
++const tests = read(walk(path.join(root, 'scripts'), (p) => /verify-.*\.mjs$/.test(p) && !p.includes('rule-coverage')));
++const esc = (s) => s.replace(/\./g, '\\.');
++
++// ID yang disebut di PENDING_RULES, mis. "4A.7 dan 4A.8", "4B.6 sampai 4B.8", "6.x per-SSID"
++const pending = new Set();
++for (const line of PENDING_RULES) {
++  const head = line.split(':')[0];
++  const found = head.match(/\d+[A-C]?(?:\.(?:\d+|x))+/g) ?? [];
++  if (/sampai/.test(head) && found.length === 2) {
++    const [a, b] = found.map((x) => x.split('.'));
++    for (let n = Number(a[a.length - 1]); n <= Number(b[b.length - 1]); n++) pending.add(`${a.slice(0, -1).join('.')}.${n}`);
++  }
++  for (const f of found) {
++    if (f.endsWith('.x')) ids.filter((i) => i.startsWith(f.slice(0, -1))).forEach((i) => pending.add(i));
++    else pending.add(f);
++  }
++}
++
++const rows = ids.map((id) => ({
++  id,
++  code: new RegExp(`ruleRef:\\s*'${esc(id)}'`).test(code),
++  test: new RegExp(`['"\`\\[ (]${esc(id)}['"\`\\] :,)]`).test(tests),
++  pending: pending.has(id),
++}));
++const group = (f) => rows.filter(f).map((r) => r.id);
++const report = {
++  'kode + test': group((r) => r.code && r.test),
++  'kode saja (belum ada test)': group((r) => r.code && !r.test),
++  'test saja (hasil normal/tanpa issue)': group((r) => !r.code && r.test),
++  'pending (tercatat di PENDING_RULES)': group((r) => !r.code && !r.test && r.pending),
++  'BELUM ADA kode, test, maupun catatan pending': group((r) => !r.code && !r.test && !r.pending),
++};
++console.log(`Total ID aturan di dokumen: ${ids.length}`);
++for (const [k, v] of Object.entries(report)) console.log(`\n${k}: ${v.length}\n  ${v.join(' ') || '-'}`);
++if (process.argv.includes('--strict') && (report['BELUM ADA kode, test, maupun catatan pending'].length || report['kode saja (belum ada test)'].length)) {
++  console.error('\nSTRICT: masih ada ID tanpa test atau tanpa catatan pending.');
++  process.exit(1);
++}
+diff -ruN -x node_modules -x .git a/scripts/verify-rule-outcomes.mjs Terminator-main/scripts/verify-rule-outcomes.mjs
+--- a/scripts/verify-rule-outcomes.mjs	1970-01-01 00:00:00.000000000 +0000
++++ b/scripts/verify-rule-outcomes.mjs	2026-10-06 03:14:47.051972727 +0000
+@@ -0,0 +1,143 @@
++/**
++ * Test hasil normal dan hasil gabungan untuk aturan dokumen yang sebelumnya tidak punya test.
++ *   npm run test:rule-outcomes
++ * Nama setiap pengecekan memuat ID aturan di docs/aturan-validator-simulator.md.
++ */
++import assert from 'node:assert/strict';
++import { validateTopology } from '../src/utils/topologyValidator.ts';
++import { interVlanBlocked } from '../src/rules/mikrotik.ts';
++
++let count = 0;
++const ok = (name, cond) => { count++; assert.ok(cond, name); };
++const base = (id, type, extra = {}) => ({ id, type, name: id, label: id, x: 0, y: 0, ports: [], status: 'online', poweredOn: true, ...extra });
++const cab = (a, b, type = 'lan', id) => ({ id: id ?? `c-${a}-${b}-${type}`, type, fromNodeId: a, toNodeId: b, fromPortId: `${a}-p`, toPortId: `${b}-p`, status: 'active', lengthKm: 0.01, attenuationDb: 0.05 });
++const has = (r, ref) => r.issues.some((i) => i.ruleRef === ref);
++const bad = (r) => r.issues.filter((i) => i.severity !== 'info');
++const st = (r, id) => r.resultByNode.get(id).status;
++
++const ontCfg = (extra = {}) => ({ brand: 'Z', model: 'x', wanMode: 'pppoe', pppoeUsername: 'u', pppoePassword: 'p', lanIp: '192.168.1.1', lanSubnet: '255.255.255.0', dhcpServerEnabled: false, ponStatus: 'O5 (Operational)', ...extra });
++const mkConfig = (over = {}) => ({
++  firewallNat: true, pppoeServer: false, dnsServer: true, totalQueues: 0,
++  interfaces: [{ name: 'ether1', type: 'ether' }, { name: 'ether2', type: 'ether' }],
++  addresses: [{ address: '192.168.1.2', mask: '255.255.255.0', interface: 'ether1' }, { address: '192.168.88.1', mask: '255.255.255.0', interface: 'ether2' }],
++  dhcpServers: [{ interface: 'ether2', poolStart: '192.168.88.10', poolEnd: '192.168.88.200', gateway: '192.168.88.1' }],
++  routes: [{ dst: '0.0.0.0/0', gateway: '192.168.1.1' }],
++  natRules: [{ chain: 'srcnat', action: 'masquerade', outInterface: 'ether1' }],
++  filterRules: [], ...over,
++});
++const mk = (over = {}, extra = {}) => base('mk', 'mikrotik', {
++  ports: [{ id: 'mk-e1', name: 'ether1 (WAN)', medium: 'ethernet', status: 'up', connectedCableId: 'c-ont-mk' }, { id: 'mk-e2', name: 'ether2 (LAN)', medium: 'ethernet', status: 'up', connectedCableId: 'c-mk-pc' }],
++  ipConfig: { mode: 'static', ip: '192.168.88.1', subnet: '255.255.255.0', gateway: '192.168.1.1', dns: '8.8.8.8' }, mikrotikConfig: mkConfig(over), ...extra,
++});
++const pc = (id = 'pc', ip = '192.168.88.10', extra = {}) => base(id, 'pc', { ipConfig: { mode: 'dhcp', ip, subnet: '255.255.255.0', gateway: ip ? ip.replace(/\.\d+$/, '.1') : '', dns: '8.8.8.8' }, ...extra });
++const ispChain = () => [base('odp', 'odp'), base('ont', 'ont', { ontConfig: ontCfg() })];
++const cables = () => [cab('odp', 'ont', 'drop_core'), cab('ont', 'mk', 'lan', 'c-ont-mk'), cab('mk', 'pc', 'lan', 'c-mk-pc')];
++
++// ---- 1.1 optik normal, 1.4 fiber ke satu ONT putus hanya memengaruhi ONT itu ----
++{
++  const r = validateTopology([...ispChain(), mk(), pc()], cables());
++  ok('1.1 optik normal: tanpa LOS', !has(r, '1.2') && st(r, 'pc') === 'internet_normal');
++  const two = [base('odp', 'odp'), base('ontA', 'ont', { ontConfig: ontCfg() }), base('ontB', 'ont', { ontConfig: ontCfg() })];
++  const broken = { ...cab('odp', 'ontB', 'drop_core'), status: 'broken' };
++  const r2 = validateTopology(two, [cab('odp', 'ontA', 'drop_core'), broken]);
++  ok('1.4 hanya ONT dengan fiber putus yang bermasalah', r2.resultByNode.get('ontB').status === 'not_connected' && r2.resultByNode.get('ontA').status === 'internet_normal');
++}
++// ---- 2.2 / 2.3 / 2.4 ONT dan DHCP ----
++{
++  const bridgeNoOptic = (dhcp) => base('ontA', 'ont', { ontConfig: ontCfg({ wanMode: 'bridge', dhcpServerEnabled: dhcp, ponStatus: 'LOS (No Signal)' }) });
++  const online = base('ontB', 'ont', { ontConfig: ontCfg({ dhcpServerEnabled: true }) });
++  const c = [cab('ontA', 'ontB'), cab('ontA', 'pc')];
++  const r2 = validateTopology([bridgeNoOptic(true), online, pc('pc', '192.168.1.100')], c);
++  ok('2.2 bridge tanpa optik dengan DHCP aktif: DHCP ganda dan 2.5', has(r2, '4A.9') && has(r2, '2.5'));
++  ok('2.2 client tidak internet normal', st(r2, 'pc') !== 'internet_normal');
++  const rogue = base('rogue', 'router', { ipConfig: { mode: 'static', ip: '192.168.1.50', subnet: '255.255.255.0', gateway: '0.0.0.0', dns: '', isDhcpServerEnabled: true } });
++  const r3 = validateTopology([rogue, online, pc('pc', '192.168.1.100')], [cab('rogue', 'ontB'), cab('ontB', 'pc')]);
++  ok('2.3 router kedua dengan DHCP aktif di jaringan yang sama: DHCP ganda', has(r3, '4A.9'));
++  const r4 = validateTopology([base('odp', 'odp'), base('ont', 'ont', { ontConfig: ontCfg({ dhcpServerEnabled: true }) }), pc('pc', '192.168.1.100')], [cab('odp', 'ont', 'drop_core'), cab('ont', 'pc')]);
++  ok('2.4 ONT mode PPPoE dengan DHCP aktif itu normal', bad(r4).length === 0 && st(r4, 'pc') === 'internet_normal');
++}
++// ---- 3.1 / 4.1 VLAN sama, 3.3 / 3.7 routing antar-VLAN, 3.4 trunk antar-switch, 4.2 / 4.3 ----
++{
++  const vl = (id, vlanId) => pc(id, '', { vlanConfig: { enabled: true, vlanId, vlanName: `v${vlanId}`, mode: 'access' } });
++  const same = validateTopology([vl('a', 10), vl('b', 10)], [cab('a', 'b')]);
++  ok('3.1 dua perangkat di VLAN yang sama: tanpa masalah VLAN', !has(same, '3.2') && !has(same, '3.5'));
++  ok('4.1 dua port access di VLAN 10: tanpa masalah VLAN', !has(same, '3.2') && !has(same, '3.5'));
++  const diff = validateTopology([vl('a', 10), vl('b', 20)], [cab('a', 'b')]);
++  ok('4.2 port access VLAN 10 dan 20 tanpa router: tidak bisa berkomunikasi', has(diff, '3.2'));
++
++  const sw = (vc) => base('sw', 'switch_managed', { vlanConfig: vc, managedSwitchConfig: { managementIp: '10.0.0.2', managementSubnet: '255.255.255.0', managementGateway: '10.0.0.1', stpMode: 'rstp', igmpSnooping: false, lacpTrunkEnabled: false, portMirroring: false, poeBudgetWatts: 0, poeUsageWatts: 0, loopProtect: true } });
++  const v20mk = mk({
++    interfaces: [{ name: 'ether1', type: 'ether' }, { name: 'ether2', type: 'ether' }, { name: 'vlan20', type: 'vlan', vlanId: 20, parent: 'ether2' }],
++    addresses: [{ address: '192.168.1.2', mask: '255.255.255.0', interface: 'ether1' }, { address: '192.168.20.1', mask: '255.255.255.0', interface: 'vlan20' }],
++    dhcpServers: [{ interface: 'vlan20', poolStart: '192.168.20.10', poolEnd: '192.168.20.200', gateway: '192.168.20.1' }],
++  });
++  const p20 = base('pc', 'pc', { ipConfig: { mode: 'dhcp', ip: '192.168.20.10', subnet: '255.255.255.0', gateway: '192.168.20.1', dns: '8.8.8.8' }, vlanConfig: { enabled: true, vlanId: 20, vlanName: 'v20', mode: 'access' } });
++  const trunkOk = { enabled: true, vlanId: 1, vlanName: 't', mode: 'trunk', allowedVlans: [10, 20] };
++  const rOk = validateTopology([...ispChain(), v20mk, sw(trunkOk), p20], [cab('odp', 'ont', 'drop_core'), cab('ont', 'mk', 'lan', 'c-ont-mk'), cab('mk', 'sw'), cab('sw', 'pc')]);
++  ok('3.3 VLAN 20 lewat trunk ke MikroTik: client internet normal', st(rOk, 'pc') === 'internet_normal');
++  ok('3.4 trunk mengizinkan VLAN 20: tanpa masalah trunk', !has(rOk, '3.5'));
++  ok('3.7 router dengan interface VLAN pada port trunk: routing jalan', bad(rOk).length === 0);
++  const trunkNo = { ...trunkOk, allowedVlans: [10] };
++  const rNo = validateTopology([...ispChain(), v20mk, sw(trunkNo), p20], [cab('odp', 'ont', 'drop_core'), cab('ont', 'mk', 'lan', 'c-ont-mk'), cab('mk', 'sw'), cab('sw', 'pc')]);
++  ok('4.3 trunk tidak mengizinkan VLAN 20: VLAN tidak sampai ke MikroTik', has(rNo, '3.5') && st(rNo, 'pc') === 'not_connected');
++}
++// ---- 3.6 DHCP di VLAN lain tanpa relay, 2.1 ONT bridge tanpa optik ke ONT online ----
++{
++  const client = base('pc', 'pc', { ipConfig: { mode: 'dhcp', ip: '', subnet: '255.255.255.0', gateway: '', dns: '' }, vlanConfig: { enabled: true, vlanId: 10, vlanName: 'v10', mode: 'access' } });
++  const server = base('rt', 'router', { ipConfig: { mode: 'static', ip: '192.168.20.1', subnet: '255.255.255.0', gateway: '', dns: '', isDhcpServerEnabled: true }, vlanConfig: { enabled: true, vlanId: 20, vlanName: 'v20', mode: 'access' } });
++  const r = validateTopology([client, server], [cab('rt', 'pc')]);
++  ok('3.6 client VLAN 10, DHCP server VLAN 20 tanpa relay: tidak dapat IP', has(r, '3.6') && st(r, 'pc') !== 'internet_normal');
++  const bridged = base('a', 'ont', { ontConfig: { brand: 'Z', model: 'x', wanMode: 'bridge', dhcpServerEnabled: false, ponStatus: 'LOS (No Signal)' } });
++  const online = base('b', 'ont', { ontConfig: ontCfg({ dhcpServerEnabled: true }) });
++  const c21 = validateTopology([base('odp', 'odp'), bridged, online, pc('pc', '192.168.1.100')], [cab('odp', 'b', 'drop_core'), cab('a', 'b'), cab('a', 'pc')]);
++  ok('2.1 bridge tanpa optik, DHCP mati: tanpa 2.5 dan tanpa DHCP ganda', !has(c21, '2.5') && !has(c21, '4A.9'));
++  ok('2.1 client dapat internet dari ONT yang online', st(c21, 'pc') === 'internet_normal');
++}
++// ---- 4A.4 IP bentrok, 4A.10 NAT berlapis ----
++{
++  const p = pc('pc', '192.168.88.1', { ipConfig: { mode: 'static', ip: '192.168.88.1', subnet: '255.255.255.0', gateway: '192.168.88.1', dns: '' } });
++  const r = validateTopology([mk(), p], [cab('mk', 'pc', 'lan', 'c-mk-pc')]);
++  ok('4A.4 client memakai IP yang sama dengan gateway router: IP bentrok', has(r, 'P3'));
++  const n = validateTopology([...ispChain(), mk(), pc()], cables());
++  ok('4A.10 NAT berlapis (ONT router dan MikroTik): internet tetap jalan', st(n, 'pc') === 'internet_normal');
++}
++// ---- 2.4 / 4A.10 DHCP ONT ISP + DHCP MikroTik: beda segmen, bukan DHCP ganda ----
++{
++  const ontDhcp = () => base('ont', 'ont', { ontConfig: ontCfg({ dhcpServerEnabled: true }) });
++  const normal = validateTopology([base('odp', 'odp'), ontDhcp(), mk(), pc()], cables());
++  ok('2.4 ONT ISP DHCP aktif ke port WAN MikroTik: bukan DHCP ganda', !has(normal, '4A.9'));
++  ok('4A.10 ONT ISP dan MikroTik sama-sama DHCP aktif: client internet normal', st(normal, 'pc') === 'internet_normal');
++  // Tetap terdeteksi bila DHCP kedua berada di sisi LAN yang sama dengan MikroTik (lewat switch).
++  const rogue = base('rogue', 'router', { ipConfig: { mode: 'static', ip: '192.168.88.50', subnet: '255.255.255.0', gateway: '0.0.0.0', dns: '', isDhcpServerEnabled: true } });
++  const sw = base('sw', 'switch');
++  const lanCables = [cab('odp', 'ont', 'drop_core'), cab('ont', 'mk', 'lan', 'c-ont-mk'), { ...cab('mk', 'sw', 'lan', 'c-mk-sw'), fromPortId: 'mk-e2' }, cab('sw', 'pc'), cab('sw', 'rogue')];
++  const dup = validateTopology([base('odp', 'odp'), ontDhcp(), mk(), sw, pc(), rogue], lanCables);
++  ok('4A.9 DHCP kedua di sisi LAN MikroTik tetap terdeteksi', has(dup, '4A.9'));
++  const single = validateTopology([base('odp', 'odp'), ontDhcp(), mk(), sw, pc()], lanCables.slice(0, 4));
++  ok('4A.9 tanpa DHCP kedua di LAN: tidak ada peringatan', !has(single, '4A.9'));
++}
++// ---- 5.1.1 / 5.2.1 / 5.3.1 MikroTik sehat, 5.4.1 / 5.4.5 PPPoE ----
++{
++  const r = validateTopology([...ispChain(), mk(), pc()], cables());
++  ok('5.1.1 interface punya IP dan DHCP: client dapat IP', bad(r).length === 0 && st(r, 'pc') !== 'connected_no_ip');
++  ok('5.2.1 default route dan NAT benar: internet jalan', st(r, 'pc') === 'internet_normal');
++  ok('5.3.1 masquerade di interface keluar: internet jalan', !has(r, '5.3.2') && !has(r, '5.3.3'));
++  const pppoeMk = { pppSecrets: [{ name: 'u', password: 'p', service: 'pppoe' }], pppoeServers: [{ interface: 'ether1', serviceName: 'x' }] };
++  const rtrw = (over = {}) => validateTopology(
++    [base('odp', 'odp'), base('ont', 'ont', { ontConfig: ontCfg({ pppoeTarget: 'mikrotik', dhcpServerEnabled: true }) }), mk({ ...pppoeMk, ...over }), pc('pc', '192.168.1.100')],
++    [cab('odp', 'ont', 'drop_core'), cab('ont', 'mk', 'lan', 'c-ont-mk'), cab('ont', 'pc')]);
++  const good = rtrw();
++  ok('5.4.1 PPPoE benar: tanpa masalah PPPoE', !['5.4.2', '5.4.3', '5.4.4'].some((x) => has(good, x)));
++  const noNat = rtrw({ natRules: [] });
++  ok('5.4.5 PPPoE tersambung tapi NAT belum benar: ONT online, client tidak ada internet', has(noNat, '5.3.2') && st(noNat, 'pc') === 'ip_no_internet');
++}
++// ---- 5.2.4 / 5.6.1 / 5.6.2 firewall antar-VLAN ----
++{
++  const vlans = [{ name: 'ether1', type: 'ether' }, { name: 'vlan10', type: 'vlan', vlanId: 10, parent: 'ether2' }, { name: 'vlan20', type: 'vlan', vlanId: 20, parent: 'ether2' }];
++  const none = { interfaces: vlans, filterRules: [] };
++  const blocked = { interfaces: vlans, filterRules: [{ chain: 'forward', action: 'drop', inInterface: 'vlan10', outInterface: 'vlan20' }] };
++  ok('5.2.4 tanpa firewall: VLAN 10 dan 20 tembus lewat MikroTik', interVlanBlocked(none, 10, 20) === false);
++  ok('5.6.1 aturan drop VLAN 10 ke 20: terblokir', interVlanBlocked(blocked, 10, 20) === true);
++  ok('5.6.2 aturan blok dihapus: tembus kembali', interVlanBlocked(none, 20, 10) === false);
++}
++console.log(`rule outcome tests: PASS (${count} assertions)`);
+diff -ruN -x node_modules -x .git a/scripts/verify-wireless-rules.mjs Terminator-main/scripts/verify-wireless-rules.mjs
+--- a/scripts/verify-wireless-rules.mjs	1970-01-01 00:00:00.000000000 +0000
++++ b/scripts/verify-wireless-rules.mjs	2026-10-05 06:47:46.199116551 +0000
+@@ -0,0 +1,128 @@
++/**
++ * Test aturan access point (4B), mesh (4C), client di port trunk (4.4), dan loop (4.5, 4B.12).
++ *   npm run test:wireless-rules
++ * Nama setiap pengecekan memuat ID aturan di docs/aturan-validator-simulator.md.
++ * Setiap aturan diuji dua arah: kasus salah terdeteksi, topologi sehat bersih.
++ */
++import assert from 'node:assert/strict';
++import { validateTopology } from '../src/utils/topologyValidator.ts';
++
++let count = 0;
++const ok = (name, cond) => { count++; assert.ok(cond, name); };
++const base = (id, type, extra = {}) => ({ id, type, name: id, label: id, x: 0, y: 0, ports: [], status: 'online', poweredOn: true, ...extra });
++const cab = (a, b, type = 'lan') => ({ id: `c-${a}-${b}-${type}`, type, fromNodeId: a, toNodeId: b, fromPortId: `${a}-p`, toPortId: `${b}-p`, status: 'active', lengthKm: 0.01, attenuationDb: 0.05 });
++const has = (r, ref) => r.issues.some((i) => i.ruleRef === ref);
++const bad = (r) => r.issues.filter((i) => i.severity !== 'info');
++const st = (r, id) => r.resultByNode.get(id).status;
++
++const mkConfig = () => ({
++  firewallNat: true, pppoeServer: false, dnsServer: true, totalQueues: 0,
++  interfaces: [{ name: 'ether1', type: 'ether' }, { name: 'ether2', type: 'ether' }],
++  addresses: [{ address: '192.168.1.2', mask: '255.255.255.0', interface: 'ether1' }, { address: '192.168.88.1', mask: '255.255.255.0', interface: 'ether2' }],
++  dhcpServers: [{ interface: 'ether2', poolStart: '192.168.88.10', poolEnd: '192.168.88.200', gateway: '192.168.88.1' }],
++  routes: [{ dst: '0.0.0.0/0', gateway: '192.168.1.1' }],
++  natRules: [{ chain: 'srcnat', action: 'masquerade', outInterface: 'ether1' }],
++  filterRules: [],
++});
++const isp = () => [
++  base('odp', 'odp'),
++  base('ont', 'ont', { ontConfig: { brand: 'Z', model: 'x', wanMode: 'pppoe', pppoeUsername: 'u', pppoePassword: 'p', lanIp: '192.168.1.1', lanSubnet: '255.255.255.0', dhcpServerEnabled: false, ponStatus: 'O5 (Operational)' } }),
++];
++const mikrotik = () => base('mk', 'mikrotik', {
++  ports: [{ id: 'mk-p', name: 'ether', medium: 'ethernet', status: 'up' }],
++  ipConfig: { mode: 'static', ip: '192.168.88.1', subnet: '255.255.255.0', gateway: '192.168.1.1', dns: '8.8.8.8' }, mikrotikConfig: mkConfig(),
++});
++const pc = (ip = '192.168.88.10') => base('pc', 'pc', { ipConfig: { mode: 'dhcp', ip, subnet: '255.255.255.0', gateway: ip ? '192.168.88.1' : '', dns: '8.8.8.8' } });
++const apNode = (extra = {}) => base('ap', 'access_point', { ipConfig: { mode: 'static', ip: '192.168.88.2', subnet: '255.255.255.0', gateway: '192.168.88.1', dns: '', isDhcpServerEnabled: false }, ...extra });
++const mesh = (id, role, extra = {}) => base(id, 'mesh', { meshConfig: { role, backhaulType: 'ethernet', fastRoaming: true, ssid: 'm', bandSteering: true, rssiThresholdDbm: -70, channel24G: 1, channel5G: 36 }, ...extra });
++const chain = [cab('odp', 'ont', 'drop_core'), cab('ont', 'mk')];
++
++// ---- 4B.1 AP bridge, DHCP AP mati, DHCP router aktif: sehat ----
++{
++  const nodes = [...isp(), mikrotik(), apNode(), pc()];
++  const r = validateTopology(nodes, [...chain, cab('mk', 'ap'), cab('ap', 'pc', 'wireless')]);
++  ok('4B.1 AP sehat: tanpa peringatan', bad(r).length === 0);
++  ok('4B.1 client WiFi internet normal', st(r, 'pc') === 'internet_normal');
++}
++// ---- 4B.2 AP tanpa uplink, DHCP AP mati ----
++{
++  const r = validateTopology([apNode(), pc('')], [cab('ap', 'pc', 'wireless')]);
++  ok('4B.2 tersambung tapi tidak dapat IP', st(r, 'pc') === 'connected_no_ip');
++}
++// ---- 4B.3 AP tanpa uplink, DHCP AP aktif ----
++{
++  const r = validateTopology([apNode({ ipConfig: { mode: 'static', ip: '192.168.88.2', subnet: '255.255.255.0', gateway: '192.168.88.1', dns: '', isDhcpServerEnabled: true, dhcpRangeStart: '192.168.88.50', dhcpRangeEnd: '192.168.88.80' } }), pc('192.168.88.50')], [cab('ap', 'pc', 'wireless')]);
++  ok('4B.3 dapat IP dari AP, tidak ada internet', st(r, 'pc') === 'ip_no_internet');
++}
++// ---- 4B.4 DHCP AP aktif dan DHCP router aktif ----
++{
++  const dhcpAp = apNode({ ipConfig: { mode: 'static', ip: '192.168.88.2', subnet: '255.255.255.0', gateway: '192.168.88.1', dns: '', isDhcpServerEnabled: true } });
++  const r = validateTopology([...isp(), mikrotik(), dhcpAp, pc()], [...chain, cab('mk', 'ap'), cab('ap', 'pc', 'wireless')]);
++  ok('4B.4 DHCP ganda terdeteksi', has(r, '4A.9'));
++}
++// ---- 4B.9 / 4B.10 SSID bertag VLAN 20 ----
++{
++  const sw = (vlanConfig) => base('sw', 'switch_managed', { vlanConfig, managedSwitchConfig: { managementIp: '10.0.0.2', managementSubnet: '255.255.255.0', managementGateway: '10.0.0.1', stpMode: 'rstp', igmpSnooping: false, lacpTrunkEnabled: false, portMirroring: false, poeBudgetWatts: 0, poeUsageWatts: 0, loopProtect: true } });
++  const tagged = apNode({ accessPointConfig: { ssid24: 'a', ssid5: 'a5', channel24: 1, channel5: 36, poePowered: false, vlanTagged: true, vlanId: 20, txPowerDbm: 20, guestPortalEnabled: false } });
++  const run = (vc) => validateTopology([sw(vc), tagged, pc('')], [cab('sw', 'ap'), cab('ap', 'pc', 'wireless')]);
++  const trunkOk = run({ enabled: true, vlanId: 1, vlanName: 't', mode: 'trunk', allowedVlans: [10, 20] });
++  ok('4B.9 trunk mengizinkan VLAN 20: tidak ada 4B.10', !has(trunkOk, '4B.10'));
++  const trunkNo = run({ enabled: true, vlanId: 1, vlanName: 't', mode: 'trunk', allowedVlans: [10] });
++  ok('4B.10 trunk tidak mengizinkan VLAN 20 terdeteksi', has(trunkNo, '4B.10'));
++  ok('4B.10 client WiFi tersambung tapi tanpa IP', st(trunkNo, 'pc') === 'connected_no_ip' && trunkNo.resultByNode.get('pc').ruleRef === '4B.10');
++  const access = run({ enabled: true, vlanId: 20, vlanName: 'a', mode: 'access' });
++  ok('4B.10 port access ke AP bertag terdeteksi', has(access, '4B.10'));
++}
++// ---- 4B.12 loop kabel antar AP tanpa STP ----
++{
++  const a = apNode(), b = base('ap2', 'access_point', { ipConfig: { mode: 'static', ip: '192.168.88.3', subnet: '255.255.255.0', gateway: '192.168.88.1', dns: '', isDhcpServerEnabled: false } });
++  const loop = validateTopology([a, b], [cab('ap', 'ap2'), { ...cab('ap', 'ap2'), id: 'c-second' }]);
++  ok('4B.12 dua kabel antar AP terdeteksi sebagai loop', has(loop, '4B.12'));
++  const chainOnly = validateTopology([a, b], [cab('ap', 'ap2')]);
++  ok('4B.12 satu kabel antar AP bukan loop', !has(chainOnly, '4B.12'));
++  // 4.5 untuk lingkaran tiga switch (lebih dari dua perangkat), dan 4.6/4.7 bila STP aktif
++  const mgd = (id, stp) => base(id, 'switch_managed', { managedSwitchConfig: { managementIp: '10.0.0.2', managementSubnet: '255.255.255.0', managementGateway: '10.0.0.1', stpMode: stp, igmpSnooping: false, lacpTrunkEnabled: false, portMirroring: false, poeBudgetWatts: 0, poeUsageWatts: 0, loopProtect: false } });
++  const ring = [cab('s1', 's2'), cab('s2', 's3'), cab('s3', 's1')];
++  ok('4.5 lingkaran tiga switch tanpa STP terdeteksi', has(validateTopology([mgd('s1', 'disabled'), mgd('s2', 'disabled'), mgd('s3', 'disabled')], ring), '4.5'));
++  ok('4.7 lingkaran tiga switch dengan STP tidak ada loop', !validateTopology([mgd('s1', 'rstp'), mgd('s2', 'rstp'), mgd('s3', 'rstp')], ring).issues.some((i) => i.id.startsWith('l2cycle-')));
++}
++// ---- 4.4 client di port trunk ----
++{
++  const trunkPc = { ...pc(''), vlanConfig: { enabled: true, vlanId: 10, vlanName: 'v', mode: 'trunk', allowedVlans: [10, 20] } };
++  const r = validateTopology([mikrotik(), trunkPc], [cab('mk', 'pc')]);
++  ok('4.4 client di port trunk terdeteksi', has(r, '4.4'));
++  ok('4.4 client tidak tersambung ke VLAN bertag', st(r, 'pc') === 'not_connected');
++  const accessPc = { ...pc(''), vlanConfig: { enabled: true, vlanId: 10, vlanName: 'v', mode: 'access' } };
++  ok('4.4 port access: tidak ada 4.4', !has(validateTopology([mikrotik(), accessPc], [cab('mk', 'pc')]), '4.4'));
++}
++// ---- 4C.1 mesh sehat ----
++const meshWorld = (over = {}) => {
++  const nodes = [...isp(), mikrotik(), mesh('root', 'root', over.root), mesh('sat', 'satellite', over.sat), pc()];
++  const cables = [...chain, cab('mk', 'root'), cab('root', 'sat', 'wireless'), cab('sat', 'pc', 'wireless')];
++  return validateTopology(nodes, over.cables ?? cables);
++};
++{
++  const r = meshWorld();
++  ok('4C.1 mesh sehat: tanpa peringatan', bad(r).length === 0);
++  ok('4C.1 client di satelit internet normal', st(r, 'pc') === 'internet_normal');
++}
++// ---- 4C.2 satelit tidak terhubung ke node utama ----
++{
++  const r = validateTopology([...isp(), mikrotik(), mesh('root', 'root'), mesh('sat', 'satellite'), pc('')], [...chain, cab('mk', 'root'), cab('sat', 'pc', 'wireless')]);
++  ok('4C.2 satelit terputus terdeteksi', has(r, '4C.2'));
++  ok('4C.2 client di satelit tidak dapat IP', st(r, 'pc') === 'connected_no_ip');
++}
++// ---- 4C.5 node utama tanpa uplink ----
++{
++  const root = mesh('root', 'root', { ipConfig: { mode: 'static', ip: '192.168.88.1', subnet: '255.255.255.0', gateway: '', dns: '', isDhcpServerEnabled: true, dhcpRangeStart: '192.168.88.10', dhcpRangeEnd: '192.168.88.50' } });
++  const r = validateTopology([root, pc('192.168.88.10')], [cab('root', 'pc', 'wireless')]);
++  ok('4C.5 client tersambung ke mesh tapi tidak ada internet', st(r, 'pc') === 'ip_no_internet');
++}
++// ---- 4C.8 DHCP hanya di node utama ----
++{
++  const dhcpSat = { ipConfig: { mode: 'static', ip: '192.168.88.5', subnet: '255.255.255.0', gateway: '192.168.88.1', dns: '', isDhcpServerEnabled: true } };
++  const r = meshWorld({ sat: dhcpSat });
++  ok('4C.8 DHCP aktif di satelit terdeteksi', has(r, '4C.8'));
++  ok('4C.8 satelit tanpa DHCP: tidak ada 4C.8', !has(meshWorld(), '4C.8'));
++}
++console.log(`wireless rule tests: PASS (${count} assertions)`);
+diff -ruN -x node_modules -x .git a/src/rules/common.ts Terminator-main/src/rules/common.ts
+--- a/src/rules/common.ts	2026-10-05 03:53:37.000000000 +0000
++++ b/src/rules/common.ts	2026-10-05 06:51:36.803867786 +0000
+@@ -6,10 +6,39 @@
+ export function activeCable(c:CableConnection){return c.status!=='broken'&&c.status!=='mismatch';}
+ export function neighbors(id:string,nodes:readonly NetworkNode[],cables:readonly CableConnection[]){const r:NetworkNode[]=[];for(const c of cables){if(!activeCable(c))continue;const oid=c.fromNodeId===id?c.toNodeId:c.toNodeId===id?c.fromNodeId:null;if(oid){const n=nodes.find(x=>x.id===oid);if(n)r.push(n)}}return r;}
+ function nodeVlan(n:NetworkNode){return n.vlanConfig?.enabled?n.vlanConfig.vlanId:undefined;}
+-export function sameL2Domain(a:NetworkNode,b:NetworkNode,c:CableConnection){if(c.type==='wireless')return true;const va=nodeVlan(a),vb=nodeVlan(b);if(va===undefined&&vb===undefined)return true;if(va!==undefined&&vb!==undefined){if(a.vlanConfig?.mode==='access'&&b.vlanConfig?.mode==='access')return va===vb;if(a.vlanConfig?.mode==='access'&&b.vlanConfig?.mode==='trunk')return (b.vlanConfig.allowedVlans??[]).includes(va);if(b.vlanConfig?.mode==='access'&&a.vlanConfig?.mode==='trunk')return (a.vlanConfig.allowedVlans??[]).includes(vb);if(a.vlanConfig?.mode==='trunk'&&b.vlanConfig?.mode==='trunk'){const aa=a.vlanConfig.allowedVlans??[],bb=b.vlanConfig.allowedVlans??[];return aa.some(v=>bb.includes(v));}}return false;}
++/** Daftar VLAN yang diizinkan pada port trunk; undefined bila node bukan trunk. */
++function trunkAllowed(n:NetworkNode){return n.vlanConfig?.enabled&&n.vlanConfig.mode==='trunk'?(n.vlanConfig.allowedVlans??[]):undefined;}
++/** VLAN yang dilayani MikroTik terstruktur lewat interface VLAN-nya (IP > Addresses / DHCP terikat ke interface itu). */
++function mikrotikVlans(n:NetworkNode){return n.type==='mikrotik'&&Array.isArray(n.mikrotikConfig?.interfaces)?n.mikrotikConfig!.interfaces!.filter(i=>i.type==='vlan'&&i.vlanId!==undefined).map(i=>i.vlanId as number):[];}
++export function sameL2Domain(a:NetworkNode,b:NetworkNode,c:CableConnection){if(c.type==='wireless')return true;const va=nodeVlan(a),vb=nodeVlan(b);if(va===undefined&&vb===undefined)return true;if(va!==undefined&&vb!==undefined){if(a.vlanConfig?.mode==='access'&&b.vlanConfig?.mode==='access')return va===vb;if(a.vlanConfig?.mode==='access'&&b.vlanConfig?.mode==='trunk')return (b.vlanConfig.allowedVlans??[]).includes(va);if(b.vlanConfig?.mode==='access'&&a.vlanConfig?.mode==='trunk')return (a.vlanConfig.allowedVlans??[]).includes(vb);if(a.vlanConfig?.mode==='trunk'&&b.vlanConfig?.mode==='trunk'){const aa=a.vlanConfig.allowedVlans??[],bb=b.vlanConfig.allowedVlans??[];return aa.some(v=>bb.includes(v));}}
++  // Trunk ke MikroTik terstruktur yang punya interface VLAN: sambung bila ada VLAN yang diizinkan trunk dan dilayani MikroTik (aturan 3.3, 3.7).
++  const ta=trunkAllowed(a),tb=trunkAllowed(b);if(ta&&vb===undefined&&mikrotikVlans(b).some(v=>ta.includes(v)))return true;if(tb&&va===undefined&&mikrotikVlans(a).some(v=>tb.includes(v)))return true;
++  return false;}
+ export function l2Domains(nodes:readonly NetworkNode[],cables:readonly CableConnection[]){const domains:Set<string>[]=[];const seen=new Set<string>();for(const node of nodes){if(seen.has(node.id))continue;const d=new Set<string>([node.id]);const q=[node.id];while(q.length){const id=q.shift()!;const current=nodes.find(n=>n.id===id);if(current&&current.type!=='ont'&&isRouter(current)&&!isBridgedAp(current,nodes))continue;for(const c of cables){if(!activeCable(c)||!carriesL2(c,nodes)||(c.fromNodeId!==id&&c.toNodeId!==id))continue;const oid=c.fromNodeId===id?c.toNodeId:c.fromNodeId;const a=nodes.find(n=>n.id===id),b=nodes.find(n=>n.id===oid);if(!a||!b||!sameL2Domain(a,b,c)||d.has(oid))continue;d.add(oid);q.push(oid)}}for(const id of d)seen.add(id);domains.push(d)}return domains;}
+ 
+ /**
++ * Apakah DHCP server `n` benar-benar melayani domain Layer 2 `domain`?
++ * Router (MikroTik, router umum) hanya melayani domain di sisi LAN-nya. Kalau router
++ * tersambung ke domain itu lewat port WAN/uplink-nya (mis. ONT ISP yang DHCP-nya aktif
++ * dicolok ke ether1 MikroTik), DHCP router itu melayani segmen LAN yang berbeda, jadi
++ * tidak dihitung sebagai DHCP ganda di domain tersebut (aturan 2.4, 4A.10).
++ * Port yang tidak punya nama (data lama) dianggap sisi LAN, sehingga perilaku lama tetap.
++ */
++export function dhcpServesDomain(n:NetworkNode,domain:ReadonlySet<string>,cables:readonly CableConnection[]):boolean{
++  if(n.type!=='router'&&n.type!=='mikrotik')return true;
++  const links=cables.filter(c=>activeCable(c)&&(c.fromNodeId===n.id||c.toNodeId===n.id)&&domain.has(c.fromNodeId===n.id?c.toNodeId:c.fromNodeId));
++  if(!links.length)return true;
++  const uplink=n.mikrotikConfig?.uplinkInterface;
++  const isWan=(c:CableConnection)=>{
++    const portId=c.fromNodeId===n.id?c.fromPortId:c.toPortId;
++    const port=n.ports.find(p=>p.id===portId||p.connectedCableId===c.id||p.connectedCableIds?.includes(c.id));
++    if(!port)return false;
++    return /wan/i.test(port.name)||(!!uplink&&port.name.split(/\s+/)[0]===uplink);
++  };
++  return !links.every(isWan);
++}
++
++/**
+  * Kabel yang meneruskan Layer 2: LAN dan wireless, plus fiber yang berujung di
+  * media converter HTB (HTB hanya mengubah media, bukan memutus broadcast).
+  */
+diff -ruN -x node_modules -x .git a/src/rules/dhcp.ts Terminator-main/src/rules/dhcp.ts
+--- a/src/rules/dhcp.ts	2026-10-05 03:53:37.000000000 +0000
++++ b/src/rules/dhcp.ts	2026-10-05 06:51:36.804180894 +0000
+@@ -1,12 +1,12 @@
+ import type { DiagnosticIssue } from '../types/network';
+ import type { RuleContext } from './types';
+-import { dhcpEnabled, issue, l2Domains } from './common';
++import { dhcpEnabled, dhcpServesDomain, issue, l2Domains } from './common';
+ 
+ /** DHCP ganda dalam satu domain Layer 2 (aturan 2.3, 4A.9, 4B.4): client mendapat IP acak. */
+ export function validateDhcpRules(ctx: RuleContext): DiagnosticIssue[] {
+   const out: DiagnosticIssue[] = [];
+   for (const d of l2Domains(ctx.nodes, ctx.cables)) {
+-    const servers = ctx.nodes.filter((n) => d.has(n.id) && n.poweredOn && dhcpEnabled(n));
++    const servers = ctx.nodes.filter((n) => d.has(n.id) && n.poweredOn && dhcpEnabled(n) && dhcpServesDomain(n, d, ctx.cables));
+     if (servers.length > 1) {
+       out.push(issue({
+         id: `dhcp-duplicate-${[...d].sort().join('-')}`, severity: 'warning', ruleRef: '4A.9', layer: 'ip', category: 'ip',
+diff -ruN -x node_modules -x .git a/src/rules/endpoint.ts Terminator-main/src/rules/endpoint.ts
+--- a/src/rules/endpoint.ts	2026-10-05 03:53:37.000000000 +0000
++++ b/src/rules/endpoint.ts	2026-10-05 06:51:36.804397769 +0000
+@@ -1,6 +1,6 @@
+ import type { DiagnosticIssue, NetworkNode } from '../types/network';
+ import type { RuleContext } from './types';
+-import { dhcpEnabled, hasGateway, isClient, issue, l2Domains, routerOwnAddresses } from './common';
++import { dhcpEnabled, dhcpServesDomain, hasGateway, isClient, issue, l2Domains, routerOwnAddresses } from './common';
+ import { findRouterConnectedToBridge, findUpstreamGateway, isSameSubnet, isValidIpv4 } from '../utils/ipUtils';
+ 
+ /**
+@@ -77,7 +77,7 @@
+     }
+ 
+     // 3.6: client DHCP, tidak ada DHCP server aktif di domain Layer 2-nya.
+-    if (ip.mode === 'dhcp' && domain && !nodes.some((x) => domain.has(x.id) && x.poweredOn && dhcpEnabled(x))) {
++    if (ip.mode === 'dhcp' && domain && !nodes.some((x) => domain.has(x.id) && x.poweredOn && dhcpEnabled(x) && dhcpServesDomain(x, domain, cables))) {
+       out.push(issue({
+         id: `dhcp-server-off-${n.id}`, ruleRef: '3.6', layer: 'ip', category: 'ip', severity: 'warning', targetNodeId: n.id,
+         title: `Tidak ada DHCP server untuk "${n.name}"`,
+diff -ruN -x node_modules -x .git a/src/rules/index.ts Terminator-main/src/rules/index.ts
+--- a/src/rules/index.ts	2026-10-05 03:53:37.000000000 +0000
++++ b/src/rules/index.ts	2026-10-05 06:47:16.983807236 +0000
+@@ -7,3 +7,4 @@
+ export { validateEndpointRules } from './endpoint';
+ export { validateDhcpRules } from './dhcp';
+ export { validatePhysicalRules } from './physical';
++export { validateWirelessRules } from './wireless';
+diff -ruN -x node_modules -x .git a/src/rules/layer2.ts Terminator-main/src/rules/layer2.ts
+--- a/src/rules/layer2.ts	2026-10-05 03:53:37.000000000 +0000
++++ b/src/rules/layer2.ts	2026-10-05 06:47:16.983395777 +0000
+@@ -1,6 +1,6 @@
+ import type { DiagnosticIssue, NetworkNode } from '../types/network';
+ import type { RuleContext } from './types';
+-import { issue, isSwitch } from './common';
++import { activeCable, isClient, issue, isSwitch } from './common';
+ 
+ const vlanOf = (n: NetworkNode) => (n.vlanConfig?.enabled ? n.vlanConfig.vlanId : undefined);
+ 
+@@ -10,7 +10,8 @@
+ }
+ 
+ /**
+- * Lapisan 2: VLAN, trunk, STP. Aturan dokumen: 3.2, 3.4, 3.5, 4.2 sampai 4.6.
++ * Lapisan 2: VLAN, trunk, STP. Aturan dokumen: 3.2, 3.4, 3.5, 4.2 sampai 4.6,
++ * 4.4 (client di port trunk), 4B.10 (SSID AP bertag VLAN) dan 4B.12 (loop AP).
+  */
+ export function validateLayer2Rules(ctx: RuleContext): DiagnosticIssue[] {
+   const out: DiagnosticIssue[] = [];
+@@ -66,5 +67,64 @@
+       }
+     }
+   }
++  // 4.4: client dicolok ke port trunk. Client tidak mengerti tag VLAN.
++  for (const n of ctx.nodes.filter((x) => isClient(x) && x.poweredOn)) {
++    const v = n.vlanConfig;
++    if (!v?.enabled || v.mode !== 'trunk') continue;
++    if (!ctx.cables.some((c) => activeCable(c) && (c.fromNodeId === n.id || c.toNodeId === n.id))) continue;
++    out.push(issue({
++      id: `client-on-trunk-${n.id}`, ruleRef: '4.4', layer: 'layer2', category: 'topology', targetNodeId: n.id,
++      title: `\"${n.name}\" dicolok ke port trunk`,
++      cause: `${n.name} tidak mengerti tag VLAN, jadi tidak tersambung ke VLAN bertag di port trunk.`,
++      solution: 'Ubah port tersebut menjadi access untuk VLAN yang diinginkan.',
++    }));
++  }
++
++  // 4B.10: SSID access point dipetakan ke VLAN, tetapi port uplink-nya access atau tidak mengizinkan VLAN itu.
++  for (const ap of ctx.nodes.filter((x) => x.type === 'access_point' && x.poweredOn && x.accessPointConfig?.vlanTagged && x.accessPointConfig.vlanId !== undefined)) {
++    const vlan = ap.accessPointConfig!.vlanId!;
++    for (const c of ctx.cables) {
++      if (c.type !== 'lan' || !activeCable(c) || (c.fromNodeId !== ap.id && c.toNodeId !== ap.id)) continue;
++      const other = ctx.nodes.find((x) => x.id === (c.fromNodeId === ap.id ? c.toNodeId : c.fromNodeId));
++      const v = other?.vlanConfig;
++      if (!other || !other.poweredOn || !v?.enabled) continue;
++      const blocked = v.mode === 'access' || !(v.allowedVlans ?? []).includes(vlan);
++      if (!blocked) continue;
++      out.push(issue({
++        id: `ap-vlan-blocked-${ap.id}-${c.id}`, ruleRef: '4B.10', layer: 'layer2', category: 'topology', targetNodeId: ap.id, targetCableId: c.id,
++        title: `VLAN ${vlan} SSID \"${ap.name}\" tidak lolos di ${other.name}`,
++        cause: `SSID ${ap.name} dipetakan ke VLAN ${vlan}, tetapi port ${other.name} berupa ${v.mode === 'access' ? 'access' : 'trunk yang tidak mengizinkan VLAN itu'}. Client tersambung ke WiFi tetapi tidak mendapat IP.`,
++        solution: `Jadikan port ${other.name} trunk dan izinkan VLAN ${vlan}.`,
++      }));
++    }
++  }
++
++  // 4B.12 dan loop yang lebih dari dua perangkat: kabel LAN antar switch/AP/mesh yang membentuk lingkaran tanpa STP atau LACP.
++  // Pasangan switch dengan kabel paralel sudah ditangani aturan 4.5 di atas.
++  const loopable = ctx.nodes.filter((n) => n.poweredOn && (isSwitch(n) || n.type === 'access_point' || n.type === 'mesh'));
++  const ids = new Set(loopable.map((n) => n.id));
++  const parent = new Map<string, string>(loopable.map((n) => [n.id, n.id]));
++  const find = (x: string): string => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x)!)!); x = parent.get(x)!; } return x; };
++  const cycleEdges: string[] = [];
++  for (const c of ctx.cables) {
++    if (c.type !== 'lan' || !activeCable(c) || !ids.has(c.fromNodeId) || !ids.has(c.toNodeId)) continue;
++    const ra = find(c.fromNodeId), rb = find(c.toNodeId);
++    if (ra === rb) cycleEdges.push(c.fromNodeId); else parent.set(ra, rb);
++  }
++  const cyclicRoots = new Set(cycleEdges.map(find));
++  for (const root of cyclicRoots) {
++    const members = loopable.filter((n) => find(n.id) === root);
++    if (members.length === 2 && members.every(isSwitch)) continue;
++    const protectedByStp = members.some((n) => isSwitch(n) && (stpOn(n) || n.managedSwitchConfig?.lacpTrunkEnabled));
++    if (protectedByStp) continue;
++    const names = members.map((n) => n.name).join(', ');
++    out.push(issue({
++      id: `l2cycle-${members.map((n) => n.id).sort().join('-')}`,
++      ruleRef: members.some((n) => !isSwitch(n)) ? '4B.12' : '4.5', layer: 'layer2', category: 'topology', targetNodeId: members[0].id,
++      title: `Loop Layer 2 antara ${names}`,
++      cause: `Kabel LAN antara ${names} membentuk lingkaran tanpa STP atau LACP. Broadcast akan berputar terus (broadcast storm) dan jaringan lumpuh.`,
++      solution: 'Lepas salah satu kabel yang membentuk lingkaran, atau aktifkan STP pada switch di dalam lingkaran itu.',
++    }));
++  }
+   return out;
+ }
+diff -ruN -x node_modules -x .git a/src/rules/wireless.ts Terminator-main/src/rules/wireless.ts
+--- a/src/rules/wireless.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/src/rules/wireless.ts	2026-10-05 06:47:16.983546487 +0000
+@@ -0,0 +1,55 @@
++import type { DiagnosticIssue, NetworkNode } from '../types/network';
++import type { RuleContext } from './types';
++import { activeCable, dhcpEnabled, issue } from './common';
++
++const MESH_PATH = new Set(['mesh', 'switch', 'switch_managed', 'access_point']);
++
++/**
++ * Mesh. Aturan dokumen: 4C.2 (satelit tidak terhubung ke node utama) dan
++ * 4C.8 (DHCP hanya di node utama).
++ * 4C.6 dan 4C.7 belum dievaluasi: mode router/AP dan sistem mesh belum dimodelkan (lihat PENDING_RULES).
++ */
++export function validateWirelessRules(ctx: RuleContext): DiagnosticIssue[] {
++  const out: DiagnosticIssue[] = [];
++  const byId = new Map(ctx.nodes.map((n) => [n.id, n]));
++
++  const reachesRoot = (start: NetworkNode): boolean => {
++    const seen = new Set<string>([start.id]);
++    const q = [start.id];
++    while (q.length) {
++      const id = q.shift()!;
++      for (const c of ctx.cables) {
++        if (!activeCable(c) || !['lan', 'wireless'].includes(c.type)) continue;
++        if (c.fromNodeId !== id && c.toNodeId !== id) continue;
++        const oid = c.fromNodeId === id ? c.toNodeId : c.fromNodeId;
++        if (seen.has(oid)) continue;
++        seen.add(oid);
++        const o = byId.get(oid);
++        if (!o || !o.poweredOn) continue;
++        if (o.type === 'mesh' && o.meshConfig?.role === 'root') return true;
++        if (MESH_PATH.has(o.type)) q.push(oid);
++      }
++    }
++    return false;
++  };
++
++  for (const n of ctx.nodes.filter((x) => x.type === 'mesh' && x.poweredOn && x.meshConfig?.role === 'satellite')) {
++    if (!reachesRoot(n)) {
++      out.push(issue({
++        id: `mesh-sat-unreachable-${n.id}`, ruleRef: '4C.2', layer: 'physical', category: 'topology', targetNodeId: n.id,
++        title: `Satelit mesh \"${n.name}\" tidak terhubung ke node utama`,
++        cause: `${n.name} berperan sebagai satelit, tetapi tidak ada jalur (kabel atau backhaul nirkabel) yang sampai ke node utama mesh, jadi satelit terputus dan tidak membentuk jaringan.`,
++        solution: 'Hubungkan satelit ke node utama atau satelit lain yang sudah tersambung, lewat kabel atau jangkauan backhaul nirkabel.',
++      }));
++    }
++    if (dhcpEnabled(n)) {
++      out.push(issue({
++        id: `mesh-sat-dhcp-${n.id}`, severity: 'warning', ruleRef: '4C.8', layer: 'ip', category: 'ip', targetNodeId: n.id,
++        title: `DHCP aktif pada satelit mesh \"${n.name}\"`,
++        cause: `DHCP seharusnya hanya dijalankan node utama mesh. DHCP di satelit ${n.name} membuat client bisa mendapat IP dari server yang salah.`,
++        solution: 'Matikan DHCP pada satelit mesh.',
++      }));
++    }
++  }
++  return out;
++}
+diff -ruN -x node_modules -x .git a/src/utils/dhcpAuto.ts Terminator-main/src/utils/dhcpAuto.ts
+--- a/src/utils/dhcpAuto.ts	2026-10-05 03:53:37.000000000 +0000
++++ b/src/utils/dhcpAuto.ts	2026-10-05 06:51:36.805149980 +0000
+@@ -1,6 +1,6 @@
+ import type { CableConnection, NetworkNode, NodeType } from '../types/network';
+ import { isSameSubnet, isValidIpv4 } from './ipUtils';
+-import { l2Domains, dhcpEnabled } from '../rules/common';
++import { l2Domains, dhcpEnabled, dhcpServesDomain } from '../rules/common';
+ import {
+   dhcpPoolOf,
+   firstFreeHost,
+@@ -67,7 +67,7 @@
+     const domain = domains.find(d => d.has(node.id));
+     const candidates = domain
+       ? working
+-          .filter(n => domain.has(n.id) && n.id !== node.id && n.poweredOn && dhcpEnabled(n))
++          .filter(n => domain.has(n.id) && n.id !== node.id && n.poweredOn && dhcpEnabled(n) && dhcpServesDomain(n, domain, cables))
+           .sort((a, b) => a.id.localeCompare(b.id))
+       : [];
+ 
+diff -ruN -x node_modules -x .git a/src/utils/ipUtils.ts Terminator-main/src/utils/ipUtils.ts
+--- a/src/utils/ipUtils.ts	2026-10-05 03:53:37.000000000 +0000
++++ b/src/utils/ipUtils.ts	2026-10-06 03:15:11.455289185 +0000
+@@ -128,6 +128,16 @@
+           return currentNode;
+         }
+       }
++      // Aturan 2.1: ONT lain yang online (mode router/PPPoE, sinyal optik normal) di belakang
++      // bridge menjadi gateway Layer 3 yang sebenarnya, jadi client mendapat internet darinya.
++      if (
++        currentNode.type === 'ont' &&
++        currentNode.poweredOn &&
++        currentNode.ontConfig?.wanMode !== 'bridge' &&
++        !(currentNode.ontConfig?.ponStatus ?? '').toUpperCase().startsWith('LOS')
++      ) {
++        return currentNode;
++      }
+       // Only traverse through Layer 1 / Layer 2 transparent bridge devices
+       if (!['switch', 'switch_managed', 'ap_ptp', 'htb'].includes(currentNode.type)) {
+         continue;
+diff -ruN -x node_modules -x .git a/src/utils/topologyValidator.ts Terminator-main/src/utils/topologyValidator.ts
+--- a/src/utils/topologyValidator.ts	2026-10-05 03:53:37.000000000 +0000
++++ b/src/utils/topologyValidator.ts	2026-10-06 03:15:39.103676349 +0000
+@@ -1,9 +1,9 @@
+ import type { CableConnection, DiagnosticIssue, NetworkNode } from '../types/network';
+ import {
+   validateDhcpRules, validateEndpointRules, validateIpRules, validateLayer2Rules,
+-  validateMikrotikRules, validateOntRules, validatePhysicalRules, validateRouterRules, evaluatePppoe,
++  validateMikrotikRules, validateOntRules, validatePhysicalRules, validateRouterRules, validateWirelessRules, evaluatePppoe,
+ } from '../rules';
+-import { dhcpEnabled, isClient, isStructuredMikrotik, l2Domains, vlanPath } from '../rules/common';
++import { dhcpEnabled, dhcpServesDomain, isClient, isStructuredMikrotik, l2Domains, vlanPath } from '../rules/common';
+ import type { RuleContext } from '../rules/types';
+ import { checkInternetAccess, findUpstreamGateway } from './ipUtils';
+ 
+@@ -33,8 +33,15 @@
+ /** Aturan yang belum bisa dievaluasi karena modelnya belum ada. Bukan masalah topologi. */
+ export const PENDING_RULES: readonly string[] = [
+   '4A.7 dan 4A.8: static route antar-router (belum ada tabel route untuk router umum/ONT).',
+-  '4B.x (access point) dan 4C.x (mesh): konfigurasi per-SSID, band, kanal, dan peran mesh belum dimodelkan.',
+-  '5.5.2: status login voucher hotspot (belum ada field status login client).',
++  '4B.5 dan 4C.6: mode router vs AP/bridge pada access point dan node utama mesh belum dimodelkan.',
++  '4B.6 sampai 4B.8: password WiFi, jangkauan sinyal, dan band per client belum dimodelkan.',
++  '4B.11: tumpang tindih kanal butuh posisi/jarak antar-AP.',
++  '4C.3, 4C.4, 4C.7: kecepatan backhaul per hop dan sistem/merek mesh (EasyMesh) belum dimodelkan.',
++  '3.8: router di port access (hanya satu VLAN yang punya gateway) belum dievaluasi.',
++  '4A.6: router umum belum punya pengaturan NAT di model data; NAT hanya dievaluasi untuk MikroTik (5.3.2).',
++  '4A.5: router umum tanpa default route masih dianggap punya internet (celah yang ditemukan saat uji); hanya MikroTik yang dicek (5.2.2).',
++  '5.3.4: koneksi masuk dari luar ke IP lokal tanpa port forward belum dimodelkan.',
++  '5.5.1 dan 5.5.2: status login voucher hotspot (belum ada field status login client).',
+   '6.x per-SSID: mode WAN dan DHCP per SSID pada ONT belum dimodelkan (ONT baru punya satu set konfigurasi).',
+ ];
+ 
+@@ -70,6 +77,11 @@
+ 
+ /** ONT ISP yang tersambung Layer 2 ke router: bila semuanya tanpa uplink optik, tidak ada internet (aturan 1.3, 6.4). */
+ function upstreamOpticalBlocker(router: NetworkNode, ctx: RuleContext): NetworkNode | undefined {
++  const hasUplink = (o: NetworkNode) => o.ontConfig?.ponStatus !== 'LOS (No Signal)'
++    && ctx.cables.some((c) => c.status !== 'broken' && ['drop_core', 'distribusi', 'feeder'].includes(c.type) && (c.fromNodeId === o.id || c.toNodeId === o.id));
++  // Gateway-nya sendiri ONT (mis. client di belakang ONT bridge yang tersambung ke ONT online, aturan 2.1):
++  // yang menentukan hanya uplink optik ONT gateway itu, bukan ONT bridge di sisi client.
++  if (router.type === 'ont') return hasUplink(router) ? undefined : router;
+   const onts: NetworkNode[] = [];
+   const seen = new Set([router.id]);
+   const q = [router.id];
+@@ -88,8 +100,6 @@
+     }
+   }
+   if (!onts.length) return undefined;
+-  const hasUplink = (o: NetworkNode) => o.ontConfig?.ponStatus !== 'LOS (No Signal)'
+-    && ctx.cables.some((c) => c.status !== 'broken' && ['drop_core', 'distribusi', 'feeder'].includes(c.type) && (c.fromNodeId === o.id || c.toNodeId === o.id));
+   return onts.every((o) => !hasUplink(o)) ? onts[0] : undefined;
+ }
+ 
+@@ -97,7 +107,7 @@
+   const ctx: RuleContext = { nodes, cables };
+   // Urutan mengikuti prinsip umum: fisik, layer 2, IP, route/NAT/layanan.
+   const issues = dedupe([
+-    ...validatePhysicalRules(ctx), ...validateLayer2Rules(ctx), ...validateIpRules(ctx), ...validateDhcpRules(ctx),
++    ...validatePhysicalRules(ctx), ...validateLayer2Rules(ctx), ...validateWirelessRules(ctx), ...validateIpRules(ctx), ...validateDhcpRules(ctx),
+     ...validateEndpointRules(ctx), ...validateRouterRules(ctx), ...validateMikrotikRules(ctx), ...validateOntRules(ctx),
+   ]);
+ 
+@@ -142,13 +152,27 @@
+       }
+     }
+ 
++    // 2b. SSID access point bertag VLAN, tetapi uplink AP tidak meloloskan VLAN itu (4B.10).
++    const apBlocked = issues.find((i) => i.id.startsWith('ap-vlan-blocked-')
++      && cables.some((c) => (c.fromNodeId === n.id || c.toNodeId === n.id) && (c.fromNodeId === i.targetNodeId || c.toNodeId === i.targetNodeId)));
++    if (apBlocked) { put(n.id, 'connected_no_ip', `Tersambung ke WiFi, tetapi tidak dapat IP. ${fromIssue(apBlocked)}`, 'layer2', '4B.10'); continue; }
++
+     // 3. IP / DHCP
+     const domain = domains.find((d) => d.has(n.id));
+-    const dhcpServers = nodes.filter((x) => domain?.has(x.id) && x.poweredOn && dhcpEnabled(x));
++    const dhcpServers = nodes.filter((x) => !!domain && domain.has(x.id) && x.poweredOn && dhcpEnabled(x) && dhcpServesDomain(x, domain, cables));
+     if (n.ipConfig?.mode === 'dhcp' && dhcpServers.length === 0) {
+       const why = own.find((i) => i.id.startsWith('dhcp-server-off-'));
+       put(n.id, 'connected_no_ip', why ? fromIssue(why) : 'Tersambung, tetapi tidak dapat IP karena tidak ada DHCP server aktif di jaringan ini.', 'ip', '3.6'); continue;
+     }
++    // 5.1.3: client di VLAN tertentu, tetapi satu-satunya DHCP server adalah MikroTik yang tidak punya DHCP untuk VLAN itu.
++    if (n.ipConfig?.mode === 'dhcp' && vlan !== undefined && upstream && isStructuredMikrotik(upstream)
++      && dhcpServers.length > 0 && dhcpServers.every((s) => s.id === upstream.id)) {
++      const cfg = upstream.mikrotikConfig!;
++      const vlanOf = (name: string) => cfg.interfaces?.find((i) => i.name === name)?.vlanId;
++      if (!(cfg.dhcpServers ?? []).some((d) => vlanOf(d.interface) === vlan)) {
++        put(n.id, 'connected_no_ip', `Tersambung, tetapi tidak dapat IP karena ${upstream.name} tidak punya interface VLAN ${vlan} dengan DHCP server.`, 'ip', '5.1.3'); continue;
++      }
++    }
+     const mkIp = upstream && issues.find((i) => i.targetNodeId === upstream.id && i.id.startsWith('mikrotik-dhcp-no-ip-'));
+     if (n.ipConfig?.mode === 'dhcp' && mkIp) { put(n.id, 'connected_no_ip', fromIssue(mkIp), 'ip', mkIp.ruleRef); continue; }
+     const ipBad = own.find((i) => i.category === 'ip' && !isRouteLevel(i));
+@@ -163,7 +187,14 @@
+     if (!upstream || !upstream.poweredOn) {
+       put(n.id, 'ip_no_internet', 'Tidak ada router atau ONT aktif di jaringan ini, jadi tidak ada jalur keluar ke internet.', 'route'); continue;
+     }
+-    const gatewayIssue = issues.find((i) => i.targetNodeId === upstream.id && i.category === 'configuration' && (i.layer === 'route' || i.layer === 'nat'));
++    // ONT pelanggan yang dial PPPoE ke MikroTik: masalah route/NAT di MikroTik itu ikut memutus internet client di belakang ONT (aturan 5.4.5).
++    const viaMikrotik = new Set<string>();
++    if (upstream.type === 'ont' && upstream.ontConfig?.pppoeTarget === 'mikrotik') {
++      const ontDomain = domains.find((d) => d.has(upstream.id));
++      for (const m of nodes) if (ontDomain?.has(m.id) && m.poweredOn && isStructuredMikrotik(m)) viaMikrotik.add(m.id);
++    }
++    const gatewayIssue = issues.find((i) => (i.targetNodeId === upstream.id || (!!i.targetNodeId && viaMikrotik.has(i.targetNodeId)))
++      && i.category === 'configuration' && (i.layer === 'route' || i.layer === 'nat'));
+     if (gatewayIssue) { put(n.id, 'ip_no_internet', `Dapat IP, tetapi tidak ada internet. ${fromIssue(gatewayIssue)}`, gatewayIssue.layer, gatewayIssue.ruleRef); continue; }
+ 
+     const blocker = upstreamOpticalBlocker(upstream, ctx);

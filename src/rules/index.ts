@@ -7,3 +7,4 @@ export { validateMikrotikRules, evaluatePppoe, interVlanBlocked, uplinkInterface
 export { validateEndpointRules } from './endpoint';
 export { validateDhcpRules } from './dhcp';
 export { validatePhysicalRules } from './physical';
+export { validateWirelessRules } from './wireless';

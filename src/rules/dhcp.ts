@@ -1,12 +1,12 @@
 import type { DiagnosticIssue } from '../types/network';
 import type { RuleContext } from './types';
-import { dhcpEnabled, issue, l2Domains } from './common';
+import { dhcpEnabled, dhcpServesDomain, issue, l2Domains } from './common';
 
 /** DHCP ganda dalam satu domain Layer 2 (aturan 2.3, 4A.9, 4B.4): client mendapat IP acak. */
 export function validateDhcpRules(ctx: RuleContext): DiagnosticIssue[] {
   const out: DiagnosticIssue[] = [];
   for (const d of l2Domains(ctx.nodes, ctx.cables)) {
-    const servers = ctx.nodes.filter((n) => d.has(n.id) && n.poweredOn && dhcpEnabled(n));
+    const servers = ctx.nodes.filter((n) => d.has(n.id) && n.poweredOn && dhcpEnabled(n) && dhcpServesDomain(n, d, ctx.cables));
     if (servers.length > 1) {
       out.push(issue({
         id: `dhcp-duplicate-${[...d].sort().join('-')}`, severity: 'warning', ruleRef: '4A.9', layer: 'ip', category: 'ip',

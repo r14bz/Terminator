@@ -1,6 +1,6 @@
 import type { DiagnosticIssue, NetworkNode } from '../types/network';
 import type { RuleContext } from './types';
-import { dhcpEnabled, hasGateway, isClient, issue, l2Domains, routerOwnAddresses } from './common';
+import { dhcpEnabled, dhcpServesDomain, hasGateway, isClient, issue, l2Domains, routerOwnAddresses } from './common';
 import { findRouterConnectedToBridge, findUpstreamGateway, isSameSubnet, isValidIpv4 } from '../utils/ipUtils';
 
 /**
@@ -77,7 +77,7 @@ export function validateEndpointRules(ctx: RuleContext): DiagnosticIssue[] {
     }
 
     // 3.6: client DHCP, tidak ada DHCP server aktif di domain Layer 2-nya.
-    if (ip.mode === 'dhcp' && domain && !nodes.some((x) => domain.has(x.id) && x.poweredOn && dhcpEnabled(x))) {
+    if (ip.mode === 'dhcp' && domain && !nodes.some((x) => domain.has(x.id) && x.poweredOn && dhcpEnabled(x) && dhcpServesDomain(x, domain, cables))) {
       out.push(issue({
         id: `dhcp-server-off-${n.id}`, ruleRef: '3.6', layer: 'ip', category: 'ip', severity: 'warning', targetNodeId: n.id,
         title: `Tidak ada DHCP server untuk "${n.name}"`,
