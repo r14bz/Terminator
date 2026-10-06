@@ -99,6 +99,8 @@ ONT punya dua mode untuk tiap koneksi WAN: **router (PPPoE)** atau **bridge**. A
 | 2.3 | ONT tanpa optik, **bukan bridge**, DHCP aktif, disambung ke ONT online | ONT itu sendiri tidak punya internet. Client di ONT online bisa **acak** mendapat IP dari ONT ini dan kehilangan internet |
 | 2.4 | ONT mode router (PPPoE), DHCP aktif | Wajar. Client hanya melihat DHCP dari ONT-nya sendiri, tidak ada DHCP ganda |
 | 2.5 | WAN mode bridge, tapi DHCP ONT aktif untuk SSID yang memakai WAN itu | Client mengambil IP dari ONT, melewati MikroTik (termasuk voucher). Hasil salah |
+| 2.6 | ONT router punya VLAN (trunk atau access) pada konfigurasinya, dan client LAN tanpa tag tersambung ke ONT itu (langsung, lewat HTB, atau lewat ONT bridge lain) | Client tetap berada di LAN ONT dan mendapat IP dari DHCP ONT. VLAN pada ONT hanya berlaku untuk sisi WAN/uplink-nya |
+| 2.7 | ONT mode bridge memakai IP LAN bawaan yang sama dengan ONT router di segmen yang sama (misalnya 192.168.1.1) | Bukan IP bentrok. ONT bridge hanya meneruskan Layer 2, jadi alamat LAN-nya tidak dicek |
 
 ## 3. VLAN
 
@@ -335,6 +337,7 @@ Untuk MikroTik, susun menu mengikuti kelompok yang ada di RouterOS (Interfaces, 
 
 - ONT RT/RW net dial PPPoE ke MikroTik (MikroTik berperan sebagai PPPoE server).
 - VLAN 10 dan VLAN 20 diblok firewall satu sama lain.
+- Client LAN tanpa tag yang tersambung ke ONT ber-VLAN tetap mendapat IP dari DHCP ONT (dilaporkan pengguna dari topologi nyata, menjadi aturan 2.6 dan 2.7).
 - Switch manageable bersifat opsional: sebagian topologi RT/RW net memakainya, sebagian tidak. Simulator harus mendukung kedua kasus, dan aturan switch (bagian 4) hanya berlaku jika switch ada di topologi.
 
 ## Catatan verifikasi

@@ -1,0 +1,1113 @@
+{
+  "name": "Topologi TERMINATOR",
+  "exportedAt": "2026-10-04T19:34:10.680Z",
+  "nodes": [
+    {
+      "id": "htb-inet",
+      "type": "internet",
+      "name": "Uplink RT/RW Net",
+      "label": "Bandwidth ISP Provider",
+      "x": 20,
+      "y": 20,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-in",
+          "name": "WAN 1",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "c-ht-1"
+        }
+      ]
+    },
+    {
+      "id": "htb-server",
+      "type": "mikrotik",
+      "name": "MikroTik Hotspot Server",
+      "label": "Pusat Voucher RT/RW Net",
+      "x": 279,
+      "y": 20,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-s-e1",
+          "name": "ether1 (WAN)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "c-ht-1"
+        },
+        {
+          "id": "p-s-e2",
+          "name": "ether2 (FO Out)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7hbvl"
+        }
+      ],
+      "ipConfig": {
+        "mode": "static",
+        "ip": "10.20.30.1",
+        "subnet": "255.255.255.0",
+        "gateway": "10.20.30.1",
+        "dns": "8.8.8.8",
+        "isDhcpServerEnabled": true
+      },
+      "mikrotikConfig": {
+        "firewallNat": true,
+        "pppoeServer": true,
+        "dnsServer": true,
+        "totalQueues": 5
+      },
+      "vlanConfig": {
+        "enabled": false,
+        "vlanId": 10,
+        "vlanName": "VLAN 10 - Manajemen",
+        "mode": "trunk",
+        "allowedVlans": [
+          10,
+          20,
+          50,
+          100,
+          1049
+        ],
+        "priorityCos": 0,
+        "nativeVlan": 1
+      }
+    },
+    {
+      "id": "node-olt-muu7h2ux",
+      "type": "olt",
+      "name": "OLT 1",
+      "label": "ZTE ZXA10 C320 (Mini-OLT 2U 16-PON)",
+      "brand": "ZTE",
+      "model": "ZTE ZXA10 C320 (Mini-OLT 2U 16-PON)",
+      "x": 20,
+      "y": 265,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-olt-muu7h2ux-0",
+          "name": "Uplink 10G",
+          "medium": "fiber",
+          "status": "up",
+          "connectedCableId": "cable-muu7ih4q"
+        },
+        {
+          "id": "p-node-olt-muu7h2ux-1",
+          "name": "Uplink GE",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7hbvl"
+        },
+        {
+          "id": "p-node-olt-muu7h2ux-2",
+          "name": "PON 1",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-olt-muu7h2ux-3",
+          "name": "PON 2",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-olt-muu7h2ux-4",
+          "name": "PON 3",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-olt-muu7h2ux-5",
+          "name": "PON 4",
+          "medium": "fiber",
+          "status": "up"
+        }
+      ],
+      "opticalConfig": {
+        "txPowerDbm": 3,
+        "connectorType": "SC/UPC"
+      }
+    },
+    {
+      "id": "node-odc-muu7hiis",
+      "type": "odc",
+      "name": "ODC 1",
+      "label": "ODC (Optical Distribution Cabinet)",
+      "brand": "",
+      "model": "ODC (Optical Distribution Cabinet)",
+      "x": 20,
+      "y": 532,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-odc-muu7hiis-0",
+          "name": "Feeder IN",
+          "medium": "fiber",
+          "status": "up",
+          "connectedCableId": "cable-muu7ih4q"
+        },
+        {
+          "id": "p-node-odc-muu7hiis-1",
+          "name": "Dist 1 (Out)",
+          "medium": "fiber",
+          "status": "up",
+          "connectedCableId": "cable-muu7iomr"
+        },
+        {
+          "id": "p-node-odc-muu7hiis-2",
+          "name": "Dist 2 (Out)",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-odc-muu7hiis-3",
+          "name": "Dist 3 (Out)",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-odc-muu7hiis-4",
+          "name": "Dist 4 (Out)",
+          "medium": "fiber",
+          "status": "up"
+        }
+      ],
+      "opticalConfig": {
+        "splitterRatio": "1:4",
+        "attenuationDb": 7.2,
+        "connectorType": "SC/UPC"
+      }
+    },
+    {
+      "id": "node-odp-muu7i0ky",
+      "type": "odp",
+      "name": "ODP 1",
+      "label": "ODP (Optical Distribution Point)",
+      "brand": "",
+      "model": "ODP (Optical Distribution Point)",
+      "x": 259,
+      "y": 310,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-odp-muu7i0ky-0",
+          "name": "Dist IN",
+          "medium": "fiber",
+          "status": "up",
+          "connectedCableId": "cable-muu7iomr"
+        },
+        {
+          "id": "p-node-odp-muu7i0ky-1",
+          "name": "Port Drop 1",
+          "medium": "fiber",
+          "status": "up",
+          "connectedCableId": "cable-muu7lk6n"
+        },
+        {
+          "id": "p-node-odp-muu7i0ky-2",
+          "name": "Port Drop 2",
+          "medium": "fiber",
+          "status": "up",
+          "connectedCableId": "cable-muu7llwn"
+        },
+        {
+          "id": "p-node-odp-muu7i0ky-3",
+          "name": "Port Drop 3",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-odp-muu7i0ky-4",
+          "name": "Port Drop 4",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-odp-muu7i0ky-5",
+          "name": "Port Drop 5",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-odp-muu7i0ky-6",
+          "name": "Port Drop 6",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-odp-muu7i0ky-7",
+          "name": "Port Drop 7",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-odp-muu7i0ky-8",
+          "name": "Port Drop 8",
+          "medium": "fiber",
+          "status": "up"
+        }
+      ],
+      "opticalConfig": {
+        "splitterRatio": "1:8",
+        "attenuationDb": 10.5,
+        "connectorType": "SC/UPC"
+      }
+    },
+    {
+      "id": "node-ont-muu7j0nh",
+      "type": "ont",
+      "name": "ONT / ONU 1",
+      "label": "ZTE ZXHN F609 (GPON 4GE+Wi-Fi)",
+      "brand": "ZTE",
+      "model": "ZTE ZXHN F609 (GPON 4GE+Wi-Fi)",
+      "x": 526,
+      "y": 494,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-ont-muu7j0nh-0",
+          "name": "PON (SC/UPC)",
+          "medium": "fiber",
+          "status": "up",
+          "connectedCableId": "cable-muu7llwn"
+        },
+        {
+          "id": "p-node-ont-muu7j0nh-1",
+          "name": "LAN 1 (GE)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7luf8"
+        },
+        {
+          "id": "p-node-ont-muu7j0nh-2",
+          "name": "LAN 2 (FE)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7nhg6"
+        },
+        {
+          "id": "p-node-ont-muu7j0nh-3",
+          "name": "LAN 3 (FE)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7qtrr"
+        },
+        {
+          "id": "p-node-ont-muu7j0nh-4",
+          "name": "LAN 4 (FE)",
+          "medium": "ethernet",
+          "status": "up"
+        },
+        {
+          "id": "p-node-ont-muu7j0nh-5",
+          "name": "WLAN 2.4G",
+          "medium": "wireless",
+          "status": "up",
+          "maxConnections": 32,
+          "connectedCableId": "cable-muu7nlem",
+          "connectedCableIds": [
+            "cable-muu7nlem",
+            "cable-muu7nm40"
+          ]
+        }
+      ],
+      "opticalConfig": {
+        "rxPowerDbm": -19,
+        "connectorType": "SC/UPC"
+      },
+      "ontConfig": {
+        "brand": "ZTE",
+        "model": "ZTE ZXHN F609 (GPON 4GE+Wi-Fi)",
+        "wanMode": "pppoe",
+        "pppoeUsername": "user_1@telkom.net",
+        "pppoePassword": "password123",
+        "vlanId": 1049,
+        "staticWanIp": "10.10.0.15",
+        "staticWanSubnet": "255.255.255.0",
+        "staticWanGateway": "10.10.0.1",
+        "staticWanDns": "8.8.8.8",
+        "lanIp": "192.168.1.1",
+        "lanSubnet": "255.255.255.0",
+        "dhcpServerEnabled": true,
+        "dhcpPoolStart": "192.168.1.2",
+        "dhcpPoolEnd": "192.168.1.254",
+        "wifiSsid": "Wi-Fi-Klien-1",
+        "wifiPassword": "admin12345"
+      },
+      "ipConfig": {
+        "mode": "static",
+        "ip": "192.168.1.1",
+        "subnet": "255.255.255.0",
+        "gateway": "10.10.0.1",
+        "dns": "8.8.8.8",
+        "isDhcpServerEnabled": true,
+        "dhcpRangeStart": "192.168.1.2",
+        "dhcpRangeEnd": "192.168.1.254"
+      },
+      "vlanConfig": {
+        "enabled": true,
+        "vlanId": 10,
+        "vlanName": "VLAN 10 - Manajemen",
+        "mode": "trunk",
+        "allowedVlans": [
+          10,
+          20,
+          50,
+          100,
+          1049
+        ],
+        "priorityCos": 0,
+        "nativeVlan": 1
+      }
+    },
+    {
+      "id": "node-ont-muu7jcvu",
+      "type": "ont",
+      "name": "ONT / ONU 2",
+      "label": "ZTE ZXHN F609 (GPON 4GE+Wi-Fi)",
+      "brand": "ZTE",
+      "model": "ZTE ZXHN F609 (GPON 4GE+Wi-Fi)",
+      "x": 466,
+      "y": 152,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-ont-muu7jcvu-0",
+          "name": "PON (SC/UPC)",
+          "medium": "fiber",
+          "status": "up",
+          "connectedCableId": "cable-muu7lk6n"
+        },
+        {
+          "id": "p-node-ont-muu7jcvu-1",
+          "name": "LAN 1 (GE)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7lrnj"
+        },
+        {
+          "id": "p-node-ont-muu7jcvu-2",
+          "name": "LAN 2 (FE)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7ne1k"
+        },
+        {
+          "id": "p-node-ont-muu7jcvu-3",
+          "name": "LAN 3 (FE)",
+          "medium": "ethernet",
+          "status": "up"
+        },
+        {
+          "id": "p-node-ont-muu7jcvu-4",
+          "name": "LAN 4 (FE)",
+          "medium": "ethernet",
+          "status": "up"
+        },
+        {
+          "id": "p-node-ont-muu7jcvu-5",
+          "name": "WLAN 2.4G",
+          "medium": "wireless",
+          "status": "up",
+          "maxConnections": 32,
+          "connectedCableId": "cable-muu7n8zz",
+          "connectedCableIds": [
+            "cable-muu7n8zz",
+            "cable-muu7n9z8"
+          ]
+        }
+      ],
+      "opticalConfig": {
+        "rxPowerDbm": -19,
+        "connectorType": "SC/UPC"
+      },
+      "ontConfig": {
+        "brand": "ZTE",
+        "model": "ZTE ZXHN F609 (GPON 4GE+Wi-Fi)",
+        "wanMode": "pppoe",
+        "pppoeUsername": "user_2@telkom.net",
+        "pppoePassword": "password123",
+        "vlanId": 1049,
+        "staticWanIp": "10.10.0.15",
+        "staticWanSubnet": "255.255.255.0",
+        "staticWanGateway": "10.10.0.1",
+        "staticWanDns": "8.8.8.8",
+        "lanIp": "192.168.1.1",
+        "lanSubnet": "255.255.255.0",
+        "dhcpServerEnabled": true,
+        "dhcpPoolStart": "192.168.1.2",
+        "dhcpPoolEnd": "192.168.1.254",
+        "wifiSsid": "Wi-Fi-Klien-2",
+        "wifiPassword": "admin12345"
+      },
+      "ipConfig": {
+        "mode": "static",
+        "ip": "192.168.1.1",
+        "subnet": "255.255.255.0",
+        "gateway": "10.10.0.1",
+        "dns": "8.8.8.8",
+        "isDhcpServerEnabled": true,
+        "dhcpRangeStart": "192.168.1.2",
+        "dhcpRangeEnd": "192.168.1.254"
+      }
+    },
+    {
+      "id": "node-pc-muu7jusp",
+      "type": "pc",
+      "name": "Komputer / PC Workstation 1",
+      "label": "Dell OptiPlex 7090 Desktop Workstation",
+      "brand": "Dell",
+      "model": "Dell OptiPlex 7090 Desktop Workstation",
+      "x": 707,
+      "y": 20,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-pc-muu7jusp-0",
+          "name": "NIC Ethernet (RJ45)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7lrnj"
+        },
+        {
+          "id": "p-node-pc-muu7jusp-1",
+          "name": "Wi-Fi Adapter",
+          "medium": "wireless",
+          "status": "up"
+        }
+      ],
+      "ipConfig": {
+        "mode": "dhcp",
+        "ip": "192.168.1.2",
+        "subnet": "255.255.255.0",
+        "gateway": "192.168.1.1",
+        "dns": "8.8.8.8"
+      }
+    },
+    {
+      "id": "node-pc-muu7jyta",
+      "type": "pc",
+      "name": "Komputer / PC Workstation 2",
+      "label": "Dell OptiPlex 7090 Desktop Workstation",
+      "brand": "Dell",
+      "model": "Dell OptiPlex 7090 Desktop Workstation",
+      "x": 386,
+      "y": 862,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-pc-muu7jyta-0",
+          "name": "NIC Ethernet (RJ45)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7luf8"
+        },
+        {
+          "id": "p-node-pc-muu7jyta-1",
+          "name": "Wi-Fi Adapter",
+          "medium": "wireless",
+          "status": "up"
+        }
+      ],
+      "ipConfig": {
+        "mode": "dhcp",
+        "ip": "192.168.1.2",
+        "subnet": "255.255.255.0",
+        "gateway": "192.168.1.1",
+        "dns": "8.8.8.8"
+      }
+    },
+    {
+      "id": "node-smartphone-muu7k0h4",
+      "type": "smartphone",
+      "name": "Smartphone / Tablet 1",
+      "label": "Smartphone / Tablet",
+      "brand": "",
+      "model": "Smartphone / Tablet",
+      "x": 1231,
+      "y": 152,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-smartphone-muu7k0h4-0",
+          "name": "Wi-Fi Interface",
+          "medium": "wireless",
+          "status": "up",
+          "connectedCableId": "cable-muu7n8zz"
+        }
+      ],
+      "ipConfig": {
+        "mode": "dhcp",
+        "ip": "192.168.1.3",
+        "subnet": "255.255.255.0",
+        "gateway": "192.168.1.1",
+        "dns": "8.8.8.8"
+      }
+    },
+    {
+      "id": "node-smartphone-muu7k3wr",
+      "type": "smartphone",
+      "name": "Smartphone / Tablet 2",
+      "label": "Smartphone / Tablet",
+      "brand": "",
+      "model": "Smartphone / Tablet",
+      "x": 557,
+      "y": 907,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-smartphone-muu7k3wr-0",
+          "name": "Wi-Fi Interface",
+          "medium": "wireless",
+          "status": "up",
+          "connectedCableId": "cable-muu7nlem"
+        }
+      ],
+      "ipConfig": {
+        "mode": "dhcp",
+        "ip": "192.168.1.4",
+        "subnet": "255.255.255.0",
+        "gateway": "192.168.1.1",
+        "dns": "8.8.8.8"
+      }
+    },
+    {
+      "id": "node-cctv-muu7k6w0",
+      "type": "cctv",
+      "name": "CCTV IP Camera 1",
+      "label": "Hikvision DS-2CD2143G2-I 4MP ColorVu PoE",
+      "brand": "Hikvision",
+      "model": "Hikvision DS-2CD2143G2-I 4MP ColorVu PoE",
+      "x": 756,
+      "y": 794,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-cctv-muu7k6w0-0",
+          "name": "PoE RJ45 Port",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7nhg6"
+        },
+        {
+          "id": "p-node-cctv-muu7k6w0-1",
+          "name": "Coaxial BNC",
+          "medium": "coaxial",
+          "status": "up"
+        }
+      ],
+      "ipConfig": {
+        "mode": "dhcp",
+        "ip": "192.168.1.3",
+        "subnet": "255.255.255.0",
+        "gateway": "192.168.1.1",
+        "dns": "8.8.8.8"
+      }
+    },
+    {
+      "id": "node-cctv-muu7k9dv",
+      "type": "cctv",
+      "name": "CCTV IP Camera 2",
+      "label": "Hikvision DS-2CD2143G2-I 4MP ColorVu PoE",
+      "brand": "Hikvision",
+      "model": "Hikvision DS-2CD2143G2-I 4MP ColorVu PoE",
+      "x": 902,
+      "y": 31,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-cctv-muu7k9dv-0",
+          "name": "PoE RJ45 Port",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7ne1k"
+        },
+        {
+          "id": "p-node-cctv-muu7k9dv-1",
+          "name": "Coaxial BNC",
+          "medium": "coaxial",
+          "status": "up"
+        }
+      ],
+      "ipConfig": {
+        "mode": "dhcp",
+        "ip": "192.168.1.5",
+        "subnet": "255.255.255.0",
+        "gateway": "192.168.1.1",
+        "dns": "8.8.8.8"
+      }
+    },
+    {
+      "id": "node-laptop-muu7mlhe",
+      "type": "laptop",
+      "name": "Laptop Portable 1",
+      "label": "Lenovo ThinkPad X1 Carbon (Intel Wi-Fi 6E + RJ45)",
+      "brand": "Lenovo",
+      "model": "Lenovo ThinkPad X1 Carbon (Intel Wi-Fi 6E + RJ45)",
+      "x": 257,
+      "y": 718,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-laptop-muu7mlhe-0",
+          "name": "LAN RJ-45",
+          "medium": "ethernet",
+          "status": "up"
+        },
+        {
+          "id": "p-node-laptop-muu7mlhe-1",
+          "name": "Wi-Fi 6 Adapter",
+          "medium": "wireless",
+          "status": "up",
+          "connectedCableId": "cable-muu7nm40"
+        }
+      ],
+      "ipConfig": {
+        "mode": "dhcp",
+        "ip": "192.168.1.5",
+        "subnet": "255.255.255.0",
+        "gateway": "192.168.1.1",
+        "dns": "8.8.8.8"
+      }
+    },
+    {
+      "id": "node-laptop-muu7mn9z",
+      "type": "laptop",
+      "name": "Laptop Portable 2",
+      "label": "Lenovo ThinkPad X1 Carbon (Intel Wi-Fi 6E + RJ45)",
+      "brand": "Lenovo",
+      "model": "Lenovo ThinkPad X1 Carbon (Intel Wi-Fi 6E + RJ45)",
+      "x": 939,
+      "y": 217,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-laptop-muu7mn9z-0",
+          "name": "LAN RJ-45",
+          "medium": "ethernet",
+          "status": "up"
+        },
+        {
+          "id": "p-node-laptop-muu7mn9z-1",
+          "name": "Wi-Fi 6 Adapter",
+          "medium": "wireless",
+          "status": "up",
+          "connectedCableId": "cable-muu7n9z8"
+        }
+      ],
+      "ipConfig": {
+        "mode": "dhcp",
+        "ip": "192.168.1.4",
+        "subnet": "255.255.255.0",
+        "gateway": "192.168.1.1",
+        "dns": "8.8.8.8"
+      }
+    },
+    {
+      "id": "node-ont-muu7pe5e",
+      "type": "ont",
+      "name": "ONT / ONU 3",
+      "label": "ZTE ZXHN F670L Dual-Band AC1200",
+      "brand": "ZTE",
+      "model": "ZTE ZXHN F670L Dual-Band AC1200",
+      "x": 862,
+      "y": 1080,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-ont-muu7pe5e-0",
+          "name": "PON (SC/UPC)",
+          "medium": "fiber",
+          "status": "up"
+        },
+        {
+          "id": "p-node-ont-muu7pe5e-1",
+          "name": "LAN 1 (GE)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7sae6"
+        },
+        {
+          "id": "p-node-ont-muu7pe5e-2",
+          "name": "LAN 2 (FE)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7sptl"
+        },
+        {
+          "id": "p-node-ont-muu7pe5e-3",
+          "name": "LAN 3 (FE)",
+          "medium": "ethernet",
+          "status": "up"
+        },
+        {
+          "id": "p-node-ont-muu7pe5e-4",
+          "name": "LAN 4 (FE)",
+          "medium": "ethernet",
+          "status": "up"
+        },
+        {
+          "id": "p-node-ont-muu7pe5e-5",
+          "name": "WLAN 2.4G",
+          "medium": "wireless",
+          "status": "up",
+          "maxConnections": 32
+        }
+      ],
+      "opticalConfig": {
+        "rxPowerDbm": -19,
+        "connectorType": "SC/UPC"
+      },
+      "ontConfig": {
+        "brand": "ZTE",
+        "model": "ZTE ZXHN F670L Dual-Band AC1200",
+        "wanMode": "bridge",
+        "pppoeUsername": "user_3@telkom.net",
+        "pppoePassword": "password123",
+        "vlanId": 1049,
+        "staticWanIp": "10.10.0.15",
+        "staticWanSubnet": "255.255.255.0",
+        "staticWanGateway": "10.10.0.1",
+        "staticWanDns": "8.8.8.8",
+        "lanIp": "192.168.1.1",
+        "lanSubnet": "255.255.255.0",
+        "dhcpServerEnabled": false,
+        "dhcpPoolStart": "192.168.1.2",
+        "dhcpPoolEnd": "192.168.1.254",
+        "wifiSsid": "Wi-Fi-Klien-3"
+      },
+      "ipConfig": {
+        "mode": "static",
+        "ip": "192.168.1.1",
+        "subnet": "255.255.255.0",
+        "gateway": "10.10.0.1",
+        "dns": "8.8.8.8",
+        "isDhcpServerEnabled": false
+      },
+      "vlanConfig": {
+        "enabled": false,
+        "vlanId": 10,
+        "vlanName": "VLAN 10 - Manajemen",
+        "mode": "access",
+        "allowedVlans": [
+          10,
+          20,
+          50,
+          100,
+          1049
+        ],
+        "priorityCos": 0,
+        "nativeVlan": 1
+      }
+    },
+    {
+      "id": "node-htb-muu7pmgx",
+      "type": "htb",
+      "name": "HTB Converter 1",
+      "label": "Netlink HTB-3100 A/B 10/100M Single Mode",
+      "brand": "Netlink",
+      "model": "Netlink HTB-3100 A/B 10/100M Single Mode",
+      "x": 848,
+      "y": 581,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-htb-muu7pmgx-0",
+          "name": "Optic SC Port",
+          "medium": "fiber",
+          "status": "up",
+          "connectedCableId": "cable-muu7r4pt"
+        },
+        {
+          "id": "p-node-htb-muu7pmgx-1",
+          "name": "LAN RJ45 Port",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7qtrr"
+        }
+      ],
+      "htbRole": "A"
+    },
+    {
+      "id": "node-htb-muu7po8h",
+      "type": "htb",
+      "name": "HTB Converter 2",
+      "label": "Netlink HTB-3100 A/B 10/100M Single Mode",
+      "brand": "Netlink",
+      "model": "Netlink HTB-3100 A/B 10/100M Single Mode",
+      "x": 1182,
+      "y": 875,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-htb-muu7po8h-0",
+          "name": "Optic SC Port",
+          "medium": "fiber",
+          "status": "up",
+          "connectedCableId": "cable-muu7r4pt"
+        },
+        {
+          "id": "p-node-htb-muu7po8h-1",
+          "name": "LAN RJ45 Port",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7sae6"
+        }
+      ],
+      "htbRole": "B"
+    },
+    {
+      "id": "node-pc-muu7pwj9",
+      "type": "pc",
+      "name": "Komputer / PC Workstation 3",
+      "label": "Dell OptiPlex 7090 Desktop Workstation",
+      "brand": "Dell",
+      "model": "Dell OptiPlex 7090 Desktop Workstation",
+      "x": 1075,
+      "y": 1245,
+      "poweredOn": true,
+      "status": "online",
+      "ports": [
+        {
+          "id": "p-node-pc-muu7pwj9-0",
+          "name": "NIC Ethernet (RJ45)",
+          "medium": "ethernet",
+          "status": "up",
+          "connectedCableId": "cable-muu7sptl"
+        },
+        {
+          "id": "p-node-pc-muu7pwj9-1",
+          "name": "Wi-Fi Adapter",
+          "medium": "wireless",
+          "status": "up"
+        }
+      ],
+      "ipConfig": {
+        "mode": "dhcp",
+        "ip": "192.168.1.2",
+        "subnet": "255.255.255.0",
+        "gateway": "192.168.1.1",
+        "dns": "8.8.8.8"
+      }
+    }
+  ],
+  "cables": [
+    {
+      "id": "c-ht-1",
+      "type": "lan",
+      "fromNodeId": "htb-inet",
+      "fromPortId": "p-in",
+      "toNodeId": "htb-server",
+      "toPortId": "p-s-e1",
+      "lengthKm": 0.005,
+      "attenuationDb": 0.01,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7hbvl",
+      "type": "lan",
+      "fromNodeId": "htb-server",
+      "fromPortId": "p-s-e2",
+      "toNodeId": "node-olt-muu7h2ux",
+      "toPortId": "p-node-olt-muu7h2ux-1",
+      "lengthKm": 0.02,
+      "attenuationDb": 0.01,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7ih4q",
+      "type": "feeder",
+      "fromNodeId": "node-olt-muu7h2ux",
+      "fromPortId": "p-node-olt-muu7h2ux-0",
+      "toNodeId": "node-odc-muu7hiis",
+      "toPortId": "p-node-odc-muu7hiis-0",
+      "lengthKm": 0.7,
+      "attenuationDb": 0.24,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7iomr",
+      "type": "distribusi",
+      "fromNodeId": "node-odc-muu7hiis",
+      "fromPortId": "p-node-odc-muu7hiis-1",
+      "toNodeId": "node-odp-muu7i0ky",
+      "toPortId": "p-node-odp-muu7i0ky-0",
+      "lengthKm": 0.9,
+      "attenuationDb": 0.32,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7lk6n",
+      "type": "drop_core",
+      "fromNodeId": "node-odp-muu7i0ky",
+      "fromPortId": "p-node-odp-muu7i0ky-1",
+      "toNodeId": "node-ont-muu7jcvu",
+      "toPortId": "p-node-ont-muu7jcvu-0",
+      "lengthKm": 0.14,
+      "attenuationDb": 0.05,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7llwn",
+      "type": "drop_core",
+      "fromNodeId": "node-odp-muu7i0ky",
+      "fromPortId": "p-node-odp-muu7i0ky-2",
+      "toNodeId": "node-ont-muu7j0nh",
+      "toPortId": "p-node-ont-muu7j0nh-0",
+      "lengthKm": 0.16,
+      "attenuationDb": 0.06,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7lrnj",
+      "type": "lan",
+      "fromNodeId": "node-ont-muu7jcvu",
+      "fromPortId": "p-node-ont-muu7jcvu-1",
+      "toNodeId": "node-pc-muu7jusp",
+      "toPortId": "p-node-pc-muu7jusp-0",
+      "lengthKm": 0.025,
+      "attenuationDb": 0.01,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7luf8",
+      "type": "lan",
+      "fromNodeId": "node-ont-muu7j0nh",
+      "fromPortId": "p-node-ont-muu7j0nh-1",
+      "toNodeId": "node-pc-muu7jyta",
+      "toPortId": "p-node-pc-muu7jyta-0",
+      "lengthKm": 0.021,
+      "attenuationDb": 0.01,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7n8zz",
+      "type": "wireless",
+      "fromNodeId": "node-ont-muu7jcvu",
+      "fromPortId": "p-node-ont-muu7jcvu-5",
+      "toNodeId": "node-smartphone-muu7k0h4",
+      "toPortId": "p-node-smartphone-muu7k0h4-0",
+      "lengthKm": 1.1,
+      "attenuationDb": 0.39,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7n9z8",
+      "type": "wireless",
+      "fromNodeId": "node-ont-muu7jcvu",
+      "fromPortId": "p-node-ont-muu7jcvu-5",
+      "toNodeId": "node-laptop-muu7mn9z",
+      "toPortId": "p-node-laptop-muu7mn9z-1",
+      "lengthKm": 1.3,
+      "attenuationDb": 0.45,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7ne1k",
+      "type": "lan",
+      "fromNodeId": "node-cctv-muu7k9dv",
+      "fromPortId": "p-node-cctv-muu7k9dv-0",
+      "toNodeId": "node-ont-muu7jcvu",
+      "toPortId": "p-node-ont-muu7jcvu-2",
+      "lengthKm": 0.029,
+      "attenuationDb": 0.01,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7nhg6",
+      "type": "lan",
+      "fromNodeId": "node-ont-muu7j0nh",
+      "fromPortId": "p-node-ont-muu7j0nh-2",
+      "toNodeId": "node-cctv-muu7k6w0",
+      "toPortId": "p-node-cctv-muu7k6w0-0",
+      "lengthKm": 0.022,
+      "attenuationDb": 0.01,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7nlem",
+      "type": "wireless",
+      "fromNodeId": "node-ont-muu7j0nh",
+      "fromPortId": "p-node-ont-muu7j0nh-5",
+      "toNodeId": "node-smartphone-muu7k3wr",
+      "toPortId": "p-node-smartphone-muu7k3wr-0",
+      "lengthKm": 1.2,
+      "attenuationDb": 0.42,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7nm40",
+      "type": "wireless",
+      "fromNodeId": "node-ont-muu7j0nh",
+      "fromPortId": "p-node-ont-muu7j0nh-5",
+      "toNodeId": "node-laptop-muu7mlhe",
+      "toPortId": "p-node-laptop-muu7mlhe-1",
+      "lengthKm": 1.1,
+      "attenuationDb": 0.39,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7qtrr",
+      "type": "lan",
+      "fromNodeId": "node-ont-muu7j0nh",
+      "fromPortId": "p-node-ont-muu7j0nh-3",
+      "toNodeId": "node-htb-muu7pmgx",
+      "toPortId": "p-node-htb-muu7pmgx-1",
+      "lengthKm": 0.022,
+      "attenuationDb": 0.01,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7r4pt",
+      "type": "drop_core",
+      "fromNodeId": "node-htb-muu7pmgx",
+      "fromPortId": "p-node-htb-muu7pmgx-0",
+      "toNodeId": "node-htb-muu7po8h",
+      "toPortId": "p-node-htb-muu7po8h-0",
+      "lengthKm": 0.22,
+      "attenuationDb": 0.08,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7sae6",
+      "type": "lan",
+      "fromNodeId": "node-htb-muu7po8h",
+      "fromPortId": "p-node-htb-muu7po8h-1",
+      "toNodeId": "node-ont-muu7pe5e",
+      "toPortId": "p-node-ont-muu7pe5e-1",
+      "lengthKm": 0.025,
+      "attenuationDb": 0.01,
+      "status": "active"
+    },
+    {
+      "id": "cable-muu7sptl",
+      "type": "lan",
+      "fromNodeId": "node-ont-muu7pe5e",
+      "fromPortId": "p-node-ont-muu7pe5e-2",
+      "toNodeId": "node-pc-muu7pwj9",
+      "toPortId": "p-node-pc-muu7pwj9-0",
+      "lengthKm": 0.018,
+      "attenuationDb": 0.01,
+      "status": "active"
+    }
+  ]
+}

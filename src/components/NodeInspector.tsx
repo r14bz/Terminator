@@ -3288,7 +3288,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       </div>
 
       {/* Footer Actions */}
-      <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+      {/* Di mobile, dock bawah (fixed, z-50) menimpa footer panel ini; beri ruang setinggi dock agar tombol bisa diklik. */}
+      <div className="p-3 pb-[calc(env(safe-area-inset-bottom,0px)+96px)] md:pb-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
         <button
           onClick={() => onDeleteNode(node.id)}
           className="flex items-center gap-1.5 text-xs font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-1.5 rounded-lg transition-colors"

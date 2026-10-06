@@ -24,6 +24,8 @@ export function validateIpRules(ctx: RuleContext): DiagnosticIssue[] {
     for (const id of d) {
       const n = nodes.find((x) => x.id === id);
       if (!n || !n.poweredOn) continue;
+      // Aturan 2.7: ONT mode bridge hanya meneruskan Layer 2 dan tidak punya alamat LAN yang ikut dicek bentrok.
+      if (n.type === 'ont' && n.ontConfig?.wanMode === 'bridge') continue;
       const ip = ipFor(n);
       if (!ip || !isValidIpv4(ip) || ip === '0.0.0.0') continue;
       byIp.set(ip, [...(byIp.get(ip) ?? []), n.name]);
