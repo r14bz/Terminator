@@ -1,6 +1,6 @@
 import type { CableConnection, NetworkNode, NodeType } from '../types/network';
 import { isSameSubnet, isValidIpv4 } from './ipUtils';
-import { l2Domains, dhcpEnabled, dhcpServesDomain } from '../rules/common';
+import { l2Domains, dhcpEnabled, dhcpServesDomain, pickDhcpServer } from '../rules/common';
 import {
   dhcpPoolOf,
   firstFreeHost,
@@ -36,7 +36,7 @@ export const DHCP_CLIENT_TYPES: readonly NodeType[] = [
  */
 export interface DhcpLeaseOptions { seed?: number; }
 
-function seededIndex(key: string, length: number, seed = 0): number {
+export function seededIndex(key: string, length: number, seed = 0): number {
   if (length <= 1) return 0;
   let h = (seed | 0) ^ 0x9e3779b9;
   for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
@@ -81,7 +81,8 @@ export function autoAssignDhcpLeases(
       continue;
     }
 
-    const gateway = candidates[seededIndex(node.id, candidates.length, options.seed)];
+    // Server terdekat menang (OFFER-nya tiba lebih dulu); acak hanya jika jaraknya seri.
+    const gateway = pickDhcpServer(node, candidates, working, cables, (len) => seededIndex(node.id, len, options.seed))!;
     const current = node.ipConfig.ip || '';
     const defaults = lanDefaultsFor(gateway);
     const others = working.filter(n => n.id !== node.id && domain?.has(n.id));

@@ -18,6 +18,7 @@ Dokumen ini adalah spesifikasi aturan untuk simulator. Berikan ke AI sebagai das
 12. **Beri ID pada test.** Nama test memuat ID aturan (misalnya `4A.7`). Buat skrip yang membandingkan semua ID di dokumen dengan ID di test, lalu melaporkan ID yang belum punya test.
 13. **Kerjakan bertahap**, satu bagian dokumen per sesi (misalnya bagian 3 tentang VLAN dulu), dan selesaikan sebelum pindah ke bagian berikutnya. Jangan mengimplementasikan seluruh dokumen sekaligus.
 14. **Laporan akhir tiap tahap:** daftar ID yang sudah diimplementasikan dan lulus, yang belum, dan yang tidak bisa diimplementasikan beserta alasannya. Jangan menyatakan selesai jika masih ada ID yang belum.
+15. **Satu sumber status internet.** Status yang tampil di kartu node, panel konfigurasi, dan hasil validator harus berasal dari sumber yang sama (`buildInternetAccessMap`). Komponen UI tidak boleh memanggil pemeriksaan internet lama (`checkInternetAccess`) langsung.
 
 ## Prinsip umum
 
@@ -42,7 +43,7 @@ Dokumen ini adalah spesifikasi aturan untuk simulator. Berikan ke AI sebagai das
 **Aturan inti:**
 
 - Client punya internet hanya jika: (1) ada jalur sampai ke perangkat yang punya sumber internet, **dan** (2) IP-nya diberikan oleh DHCP yang berada di jalur menuju sumber tersebut.
-- Jika ada lebih dari satu DHCP server aktif dalam satu jaringan layer 2 yang sama, client mendapat IP **secara acak** dari salah satunya. Jika server itu tidak punya jalur ke internet, client kehilangan internet.
+- Jika ada lebih dari satu DHCP server aktif dalam satu jaringan layer 2 yang sama, client mengambil IP dari server **terdekat** (lompatan layer 2 paling sedikit), karena OFFER-nya tiba lebih dulu. Hanya jika jaraknya seri, pilihannya **acak** (deterministik per client lewat seed). Jika server yang terpilih tidak punya jalur ke internet (misalnya ONT mode bridge), client kehilangan internet.
 - Jalur VLAN harus **tidak putus** dari ujung ke ujung. Satu titik yang tidak mengizinkan sebuah VLAN memutus VLAN itu.
 
 ### Aturan alamat IP dan peringatan (hindari false positive)
@@ -96,11 +97,12 @@ ONT punya dua mode untuk tiap koneksi WAN: **router (PPPoE)** atau **bridge**. A
 |---|---|---|
 | 2.1 | ONT tanpa optik disambung LAN ke ONT lain yang online, mode **bridge**, DHCP ONT mati | Client dapat IP dan internet dari ONT yang online |
 | 2.2 | Kasus 2.1, tapi DHCP ONT tanpa optik **aktif** | Client dapat IP dari ONT tanpa optik, **tidak ada internet** |
-| 2.3 | ONT tanpa optik, **bukan bridge**, DHCP aktif, disambung ke ONT online | ONT itu sendiri tidak punya internet. Client di ONT online bisa **acak** mendapat IP dari ONT ini dan kehilangan internet |
+| 2.3 | ONT tanpa optik, **bukan bridge**, DHCP aktif, disambung ke ONT online | ONT itu sendiri tidak punya internet. Client yang lebih dekat ke ONT ini (atau berjarak sama) mendapat IP darinya dan kehilangan internet |
 | 2.4 | ONT mode router (PPPoE), DHCP aktif | Wajar. Client hanya melihat DHCP dari ONT-nya sendiri, tidak ada DHCP ganda |
 | 2.5 | WAN mode bridge, tapi DHCP ONT aktif untuk SSID yang memakai WAN itu | Client mengambil IP dari ONT, melewati MikroTik (termasuk voucher). Hasil salah |
 | 2.6 | ONT router punya VLAN (trunk atau access) pada konfigurasinya, dan client LAN tanpa tag tersambung ke ONT itu (langsung, lewat HTB, atau lewat ONT bridge lain) | Client tetap berada di LAN ONT dan mendapat IP dari DHCP ONT. VLAN pada ONT hanya berlaku untuk sisi WAN/uplink-nya |
 | 2.7 | ONT mode bridge memakai IP LAN bawaan yang sama dengan ONT router di segmen yang sama (misalnya 192.168.1.1) | Bukan IP bentrok. ONT bridge hanya meneruskan Layer 2, jadi alamat LAN-nya tidak dicek |
+| 2.8 | Client menempel ke ONT bridge yang DHCP-nya aktif (langsung atau lewat HTB), sementara ONT router lain di segmen yang sama juga punya DHCP | Server terdekat menang: client di ONT bridge mendapat IP dari ONT bridge dan **tidak ada internet**. Client di LAN ONT router tetap normal. Jika DHCP ONT bridge dimatikan, semua client normal |
 
 ## 3. VLAN
 
@@ -150,7 +152,7 @@ MikroTik adalah router dengan fitur tambahan (PPPoE server, hotspot, firewall la
 | 4A.6 | Router di sisi WAN tanpa NAT | Client dapat IP, tapi tidak ada internet |
 | 4A.7 | Router A tersambung ke router B, router A tidak punya static route ke LAN B | Client LAN A tidak bisa menjangkau LAN B. Client LAN B tetap bisa ke internet lewat A jika default route dan NAT benar |
 | 4A.8 | Router A punya static route ke LAN B lewat router B | Client LAN A bisa menjangkau LAN B, selama router B tidak melakukan NAT di sisi yang menghadap A |
-| 4A.9 | Dua router dengan DHCP aktif di jaringan layer 2 yang sama | DHCP ganda, client mendapat IP acak (lihat prinsip umum) |
+| 4A.9 | Dua router dengan DHCP aktif di jaringan layer 2 yang sama | DHCP ganda: server terdekat menang, jika jarak seri dipilih acak (lihat prinsip umum) |
 | 4A.10 | Router di belakang router lain (NAT berlapis) | Internet tetap jalan, tapi koneksi dari luar ke perangkat di dalam tidak bisa tanpa port forward di tiap lapis |
 
 ## 4B. Access point (AP)

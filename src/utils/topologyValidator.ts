@@ -3,7 +3,8 @@ import {
   validateDhcpRules, validateEndpointRules, validateIpRules, validateLayer2Rules,
   validateMikrotikRules, validateOntRules, validatePhysicalRules, validateRouterRules, validateWirelessRules, evaluatePppoe,
 } from '../rules';
-import { dhcpEnabled, dhcpServesDomain, isClient, isStructuredMikrotik, l2Domains, vlanPath } from '../rules/common';
+import { dhcpEnabled, dhcpServesDomain, isClient, isStructuredMikrotik, l2Domains, pickDhcpServer, vlanPath } from '../rules/common';
+import { seededIndex } from './dhcpAuto';
 import type { RuleContext } from '../rules/types';
 import { checkInternetAccess, findUpstreamGateway } from './ipUtils';
 
@@ -164,6 +165,16 @@ export function validateTopology(nodes: readonly NetworkNode[], cables: readonly
       const why = own.find((i) => i.id.startsWith('dhcp-server-off-'));
       put(n.id, 'connected_no_ip', why ? fromIssue(why) : 'Tersambung, tetapi tidak dapat IP karena tidak ada DHCP server aktif di jaringan ini.', 'ip', '3.6'); continue;
     }
+    // 2.2 / 2.5: server DHCP yang melayani client (yang terdekat) adalah ONT mode bridge.
+    // ONT bridge hanya meneruskan Layer 2, jadi client yang mengambil IP darinya tidak punya jalur ke internet.
+    if (n.ipConfig?.mode === 'dhcp' && dhcpServers.length > 0) {
+      const served = pickDhcpServer(n, dhcpServers, nodes, cables, (len) => seededIndex(n.id, len));
+      if (served?.type === 'ont' && served.ontConfig?.wanMode === 'bridge') {
+        put(n.id, 'ip_no_internet', `Dapat IP dari ${served.name}, tetapi ${served.name} berada di mode Bridge (hanya meneruskan Layer 2, tanpa routing atau NAT), jadi tidak ada internet. Matikan DHCP server pada ${served.name}.`, 'ip', '2.5');
+        continue;
+      }
+    }
+
     // 5.1.3: client di VLAN tertentu, tetapi satu-satunya DHCP server adalah MikroTik yang tidak punya DHCP untuk VLAN itu.
     if (n.ipConfig?.mode === 'dhcp' && vlan !== undefined && upstream && isStructuredMikrotik(upstream)
       && dhcpServers.length > 0 && dhcpServers.every((s) => s.id === upstream.id)) {

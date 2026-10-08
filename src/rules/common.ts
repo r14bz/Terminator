@@ -20,6 +20,42 @@ export function sameL2Domain(a:NetworkNode,b:NetworkNode,c:CableConnection){if(c
 export function l2Domains(nodes:readonly NetworkNode[],cables:readonly CableConnection[]){const domains:Set<string>[]=[];const seen=new Set<string>();for(const node of nodes){if(seen.has(node.id))continue;const d=new Set<string>([node.id]);const q=[node.id];while(q.length){const id=q.shift()!;const current=nodes.find(n=>n.id===id);if(current&&current.type!=='ont'&&isRouter(current)&&!isBridgedAp(current,nodes))continue;for(const c of cables){if(!activeCable(c)||!carriesL2(c,nodes)||(c.fromNodeId!==id&&c.toNodeId!==id))continue;const oid=c.fromNodeId===id?c.toNodeId:c.fromNodeId;const a=nodes.find(n=>n.id===id),b=nodes.find(n=>n.id===oid);if(!a||!b||!sameL2Domain(a,b,c)||d.has(oid))continue;d.add(oid);q.push(oid)}}for(const id of d)seen.add(id);domains.push(d)}return domains;}
 
 /**
+ * Jumlah lompatan kabel dari `startId` ke tiap node di domain Layer 2-nya.
+ * Aturan tepinya sama persis dengan l2Domains (kabel aktif, carriesL2, sameL2Domain, router memutus).
+ */
+export function l2Distances(startId:string,nodes:readonly NetworkNode[],cables:readonly CableConnection[]):Map<string,number>{
+  const dist=new Map<string,number>([[startId,0]]);const q=[startId];
+  while(q.length){
+    const id=q.shift()!;const current=nodes.find(n=>n.id===id);
+    if(current&&current.type!=='ont'&&isRouter(current)&&!isBridgedAp(current,nodes))continue;
+    for(const c of cables){
+      if(!activeCable(c)||!carriesL2(c,nodes)||(c.fromNodeId!==id&&c.toNodeId!==id))continue;
+      const oid=c.fromNodeId===id?c.toNodeId:c.fromNodeId;
+      const a=nodes.find(n=>n.id===id),b=nodes.find(n=>n.id===oid);
+      if(!a||!b||!sameL2Domain(a,b,c)||dist.has(oid))continue;
+      dist.set(oid,dist.get(id)!+1);q.push(oid);
+    }
+  }
+  return dist;
+}
+
+/**
+ * Server DHCP yang melayani `client` bila ada beberapa server di domain Layer 2 yang sama:
+ * yang TERDEKAT (lompatan Layer 2 paling sedikit) menang, karena OFFER-nya tiba lebih dulu.
+ * Hanya jika jaraknya seri, dipilih acak lewat `choose` (deterministik per client lewat seed).
+ * Dipakai bersama oleh dhcpAuto (pemberi lease) dan validator (penilai internet) supaya keduanya sepakat.
+ */
+export function pickDhcpServer(client:NetworkNode,candidates:readonly NetworkNode[],nodes:readonly NetworkNode[],cables:readonly CableConnection[],choose:(len:number)=>number):NetworkNode|undefined{
+  if(!candidates.length)return undefined;
+  const sorted=[...candidates].sort((a,b)=>a.id.localeCompare(b.id));
+  const dist=l2Distances(client.id,nodes,cables);
+  const d=(n:NetworkNode)=>dist.get(n.id)??Number.POSITIVE_INFINITY;
+  const best=Math.min(...sorted.map(d));
+  const tied=sorted.filter(n=>d(n)===best);
+  return tied[choose(tied.length)];
+}
+
+/**
  * Apakah DHCP server `n` benar-benar melayani domain Layer 2 `domain`?
  * Router (MikroTik, router umum) hanya melayani domain di sisi LAN-nya. Kalau router
  * tersambung ke domain itu lewat port WAN/uplink-nya (mis. ONT ISP yang DHCP-nya aktif

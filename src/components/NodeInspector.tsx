@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   X,
   Power,
@@ -41,7 +41,8 @@ import { DEVICE_BRANDS } from '../data/deviceBrands';
 import type { OpticalCalculationResult } from '../utils/opticalCalculator';
 import { cablesOnPort, portCapacity } from '../utils/portReconcile';
 import { SPLITTER_LOSS_MAP } from '../utils/opticalCalculator';
-import { findUpstreamGateway, isSameSubnet, isValidIpv4, checkInternetAccess } from '../utils/ipUtils';
+import { findUpstreamGateway, isSameSubnet, isValidIpv4 } from '../utils/ipUtils';
+import { buildInternetAccessMap } from '../utils/internetAccessMap';
 import { allocateDhcpLease, allocateStaticHost, lanDefaultsFor } from '../utils/ipAlloc';
 
 interface NodeInspectorProps {
@@ -128,7 +129,12 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         )
       : [];
 
-  const internetStatus = checkInternetAccess(node, allNodes, allCables);
+  // Sumber status yang SAMA dengan kartu di kanvas (pemeriksaan lama + validator topologi),
+  // supaya panel ini tidak menampilkan "Normal" untuk client yang di kartunya Putus.
+  const internetStatus = useMemo(
+    () => buildInternetAccessMap(allNodes, allCables).get(node.id),
+    [allNodes, allCables, node.id],
+  );
 
   const [activeTab, setActiveTab] = useState<'config' | 'telemetry' | 'hardware' | 'sop'>('config');
   const [showAddPortDropdown, setShowAddPortDropdown] = useState(false);
