@@ -7,7 +7,6 @@ import {
   BookOpen,
   FolderOpen,
   Camera,
-  Activity,
   Undo2,
   Redo2,
   Download,
@@ -112,18 +111,15 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="flex items-center justify-between gap-2">
         {/* Zone 1: Wordmark & Logo */}
         <div className="flex items-center gap-2.5 shrink-0">
-          <a href="/" className="flex items-center gap-2 text-slate-900 transition-opacity hover:opacity-85">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-600 text-white font-bold shadow-sm shrink-0">
-              <Activity className="h-5 w-5" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm sm:text-base font-bold tracking-tight text-slate-900 leading-none">
-                TERMINATOR
-              </span>
-              <span className="text-[9.5px] sm:text-[10px] text-slate-500 font-medium tracking-wide">
-                Network Simulator
-              </span>
-            </div>
+          <a href="/" aria-label="Terminator - Terminal Network Simulator" className="flex items-center transition-opacity hover:opacity-85">
+            <img
+              src="/brand/terminator-logo.png"
+              alt="Terminator - Terminal Network Simulator"
+              width={640}
+              height={196}
+              draggable={false}
+              className="h-9 sm:h-10 w-auto select-none"
+            />
           </a>
 
           <div className="hidden xl:flex items-center text-xs text-slate-400 pl-2 border-l border-slate-200">
