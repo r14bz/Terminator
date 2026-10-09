@@ -5,6 +5,7 @@ import {
 } from '../rules';
 import { dhcpEnabled, dhcpServesDomain, isClient, isStructuredMikrotik, l2Domains, pickDhcpServer, vlanPath } from '../rules/common';
 import { seededIndex } from './dhcpAuto';
+import { routerHasInternetPath } from './upstreamInternet';
 import type { RuleContext } from '../rules/types';
 import { checkInternetAccess, findUpstreamGateway } from './ipUtils';
 
@@ -40,7 +41,7 @@ export const PENDING_RULES: readonly string[] = [
   '4C.3, 4C.4, 4C.7: kecepatan backhaul per hop dan sistem/merek mesh (EasyMesh) belum dimodelkan.',
   '3.8: router di port access (hanya satu VLAN yang punya gateway) belum dievaluasi.',
   '4A.6: router umum belum punya pengaturan NAT di model data; NAT hanya dievaluasi untuk MikroTik (5.3.2).',
-  '4A.5: router umum tanpa default route masih dianggap punya internet (celah yang ditemukan saat uji); hanya MikroTik yang dicek (5.2.2).',
+  '4A.5: pengaturan default route pada router umum belum dimodelkan (jalur uplink-nya sudah dicek lewat 4A.11); hanya MikroTik yang dicek default route-nya (5.2.2).',
   '5.3.4: koneksi masuk dari luar ke IP lokal tanpa port forward belum dimodelkan.',
   '5.5.1 dan 5.5.2: status login voucher hotspot (belum ada field status login client).',
   '6.x per-SSID: mode WAN dan DHCP per SSID pada ONT belum dimodelkan (ONT baru punya satu set konfigurasi).',
@@ -80,6 +81,8 @@ function undefinedRulesFor(nodes: readonly NetworkNode[], ctx: RuleContext): str
 function upstreamOpticalBlocker(router: NetworkNode, ctx: RuleContext): NetworkNode | undefined {
   // Sumber Internet tidak punya uplink optik; internetnya instan (aturan 8.1).
   if (router.type === 'internet_source') return undefined;
+  // Bila router sudah punya jalur ke sumber internet (mis. Sumber Internet lewat ONT bridge), LOS pada ONT lain tidak relevan.
+  if ((router.type === 'mikrotik' || router.type === 'router') && routerHasInternetPath(router, ctx.nodes, ctx.cables)) return undefined;
   const hasUplink = (o: NetworkNode) => o.ontConfig?.ponStatus !== 'LOS (No Signal)'
     && ctx.cables.some((c) => c.status !== 'broken' && ['drop_core', 'distribusi', 'feeder'].includes(c.type) && (c.fromNodeId === o.id || c.toNodeId === o.id));
   // Gateway-nya sendiri ONT (mis. client di belakang ONT bridge yang tersambung ke ONT online, aturan 2.1):
@@ -221,6 +224,11 @@ export function validateTopology(nodes: readonly NetworkNode[], cables: readonly
       }
     }
     if (resultByNode.has(n.id)) continue;
+
+    // 4A.11: router atau MikroTik yang jadi gateway client tidak punya jalur ke sumber internet.
+    if ((upstream.type === 'router' || upstream.type === 'mikrotik') && !routerHasInternetPath(upstream, nodes, cables)) {
+      put(n.id, 'ip_no_internet', `Dapat IP dari ${upstream.name}, tetapi ${upstream.name} tidak punya jalur ke sumber internet. Hubungkan port WAN-nya ke ONT ISP, Sumber Internet, atau node Internet.`, 'route', '4A.11'); continue;
+    }
 
     // MikroTik terstruktur sudah dievaluasi penuh oleh rules/mikrotik.ts; pengecekan lama hanya untuk perangkat tanpa konfigurasi terstruktur.
     const legacy = isStructuredMikrotik(upstream) ? { hasInternet: true } as { hasInternet: boolean; reason?: string } : checkInternetAccess(n, nodes, cables);

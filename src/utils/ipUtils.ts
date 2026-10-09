@@ -1,4 +1,5 @@
 import type { NetworkNode, CableConnection } from '../types/network';
+import { routerHasInternetPath } from './upstreamInternet';
 
 /**
  * Single source of truth for IPv4 validation.
@@ -281,6 +282,9 @@ export function checkInternetAccess(
     if (!node.mikrotikConfig?.firewallNat) {
       return { hasInternet: false, reason: 'Firewall NAT Masquerade pada MikroTik belum diaktifkan.' };
     }
+    if (!routerHasInternetPath(node, allNodes, allCables)) {
+      return { hasInternet: false, reason: 'MikroTik tidak punya jalur ke sumber internet (hubungkan port WAN ke ONT ISP, Sumber Internet, atau node Internet).' };
+    }
     return { hasInternet: true };
   }
 
@@ -298,6 +302,15 @@ export function checkInternetAccess(
     upstreamGateway.type === 'ont' && upstreamGateway.ontConfig?.wanMode === 'bridge'
       ? findRouterConnectedToBridge(upstreamGateway, allNodes, allCables) || upstreamGateway
       : upstreamGateway;
+
+  // Aturan 4A.11: router/MikroTik yang jadi gateway client harus punya jalur ke sumber internet.
+  if ((activeGateway.type === 'mikrotik' || activeGateway.type === 'router') && !routerHasInternetPath(activeGateway, allNodes, allCables)) {
+    return {
+      hasInternet: false,
+      reason: `${activeGateway.name} tidak punya jalur ke sumber internet (hubungkan WAN ke ONT ISP, Sumber Internet, atau node Internet).`,
+      gatewayNode: activeGateway,
+    };
+  }
 
   const routerLanIp =
     activeGateway.type === 'ont'

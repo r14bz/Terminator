@@ -70,7 +70,9 @@ const expectIssue = (name, nodes, cables, text) => assert.equal(has(validateTopo
 {
   const r=node('router',{ipConfig:{mode:'static',ip:'192.168.1.1',subnet:'255.255.255.0',gateway:'0.0.0.0'}});
   const p=node('pc',{ipConfig:{mode:'static',ip:'192.168.1.2',subnet:'255.255.255.0',gateway:'192.168.1.1'}});
-  expectNoIssues('normal host/router addressing', [r,p], [cable(r,p)]);
+  // Aturan 4A.11: router yang sudah tersambung harus punya jalur ke sumber internet, jadi node Internet dipasang di router.
+  const net=node('internet');
+  expectNoIssues('normal host/router addressing', [r,p,net], [cable(r,p),cable(r,net)]);
 }
 
 console.log('topology rule tests: PASS');

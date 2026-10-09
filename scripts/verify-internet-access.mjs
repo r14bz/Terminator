@@ -350,10 +350,13 @@ const statusOf = (t, id) => checkInternetAccess(t.nodes.find((x) => x.id === id)
 // missing visited check would hang this file rather than fail it.
 {
   const loop = {
+    // Aturan 4A.11: router harus punya jalur ke sumber internet, jadi node Internet
+    // 'net' dipasang di router 'c'. Itu tidak mengubah apa yang diuji di sini
+    // (siklus, gateway terdekat, dan tidak ada validasi NAT untuk router biasa).
     nodes: [node('a', 'pc'), node('b', 'switch'), node('c', 'router'), node('r', 'mikrotik', {
       ipConfig: { ...RTR_NAT }, mikrotikConfig: { ...RTR_CFG },
-    })],
-    cables: [cable('a', 'b'), cable('b', 'c'), cable('c', 'a'), cable('c', 'r')],
+    }), node('net', 'internet')],
+    cables: [cable('a', 'b'), cable('b', 'c'), cable('c', 'a'), cable('c', 'r'), cable('c', 'net')],
   };
   // 'r' sits behind the loop, so returning it would mean the search kept going
   // past a nearer gateway; 'c' is one hop away and is type 'router', which the

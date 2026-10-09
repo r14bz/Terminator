@@ -154,6 +154,9 @@ MikroTik adalah router dengan fitur tambahan (PPPoE server, hotspot, firewall la
 | 4A.8 | Router A punya static route ke LAN B lewat router B | Client LAN A bisa menjangkau LAN B, selama router B tidak melakukan NAT di sisi yang menghadap A |
 | 4A.9 | Dua router dengan DHCP aktif di jaringan layer 2 yang sama | DHCP ganda: server terdekat menang, jika jarak seri dipilih acak (lihat prinsip umum) |
 | 4A.10 | Router di belakang router lain (NAT berlapis) | Internet tetap jalan, tapi koneksi dari luar ke perangkat di dalam tidak bisa tanpa port forward di tiap lapis |
+| 4A.11 | Router atau MikroTik sudah tersambung ke perangkat lain, tetapi tidak punya jalur ke sumber internet | Client di belakangnya dapat IP lokal tetapi tidak ada internet, dan router atau MikroTik diberi peringatan. Router yang belum tersambung ke apa pun tidak diperingatkan |
+| 4A.12 | Router atau MikroTik tersambung (langsung, lewat switch, AP, atau HTB, atau lewat ONT bridge) ke node Internet, Sumber Internet yang menyala, ONT ISP yang aktif, atau router lain yang punya jalur sendiri | Internet normal |
+| 4A.13 | ONT pelanggan RT/RW (dial PPPoE ke MikroTik), Sumber Internet yang mati, kabel uplink yang putus, atau dua router yang hanya saling tersambung tanpa sumber | Bukan sumber internet, jadi tidak ada jalur. LOS pada ONT ISP tetap dilaporkan sebagai 1.3 karena alasannya lebih spesifik |
 
 ## 4B. Access point (AP)
 
