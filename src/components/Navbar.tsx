@@ -115,10 +115,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             <img
               src="/brand/terminator-logo.png"
               alt="Terminator - Terminal Network Simulator"
-              width={640}
-              height={147}
+              width={1280}
+              height={275}
               draggable={false}
-              className="h-9 sm:h-10 w-auto select-none"
+              className="h-11 sm:h-14 w-auto select-none"
             />
           </a>
 
@@ -173,7 +173,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* AI Network Assistant Button */}
           <button
             onClick={onOpenAiChat}
-            className={`flex items-center gap-1 sm:gap-1.5 rounded-lg border px-2 py-1.5 sm:px-2.5 sm:py-1.5 text-xs font-bold transition-all shadow-2xs whitespace-nowrap ${
+            className={`flex items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] font-bold transition-all shadow-2xs whitespace-nowrap ${
               aiStatus?.provider === 'openrouter'
                 ? 'border-purple-300 bg-linear-to-r from-purple-50 to-indigo-50 text-purple-900 hover:from-purple-100 hover:to-indigo-100 hover:border-purple-400'
                 : 'border-sky-300 bg-linear-to-r from-sky-50 to-indigo-50 text-sky-800 hover:from-sky-100 hover:to-indigo-100 hover:border-sky-400'
@@ -181,15 +181,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             title={`Buka Terminator AI (${aiStatus?.providerName || 'AI Asisten'} - ${aiStatus?.model || ''})`}
           >
             <Sparkles
-              className={`h-3.5 w-3.5 shrink-0 ${
+              className={`h-3 w-3 shrink-0 ${
                 aiStatus?.provider === 'openrouter' ? 'text-purple-600' : 'text-sky-600'
               }`}
             />
-            <span className="hidden sm:inline">AI Asisten</span>
-            <span className="sm:hidden">AI</span>
+            <span>AI</span>
             {aiStatus && (
               <span
-                className={`rounded-full px-1.5 py-0.2 text-[9px] font-bold tracking-wide ${
+                className={`hidden xl:inline rounded-full px-1.5 py-0.2 text-[9px] font-bold tracking-wide ${
                   aiStatus.provider === 'openrouter'
                     ? 'bg-purple-600 text-white'
                     : aiStatus.provider === 'opencode'
