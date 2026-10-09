@@ -328,12 +328,32 @@ Tujuan: pengguna bisa melihat dan mengubah konfigurasi tiap node seperti di pera
 | | SSID | Nama, password, band, kanal, VLAN |
 | **Mesh** | Node | Peran (utama atau satelit), tipe backhaul (kabel atau nirkabel), mode (router atau AP/bridge), sistem mesh (untuk aturan 4C.7), SSID tunggal |
 | **BRAS** (opsional) | Layanan | Akun PPPoE pelanggan (username dan password), profil kecepatan, status internet upstream |
+| **Sumber Internet** | LAN | IP gateway, subnet mask, DHCP server (aktif/mati, pool awal dan akhir), DNS |
 | **Client** | IP | Mode (DHCP atau statis), IP, mask, gateway, DNS |
 | | WiFi | SSID tujuan dan password |
 
 Untuk MikroTik, susun menu mengikuti kelompok yang ada di RouterOS (Interfaces, IP, Firewall, PPP, Hotspot) agar pengguna terbiasa dengan strukturnya.
 
 **Alat uji pada client (disarankan):** sediakan pengecekan sederhana (mirip ping atau traceroute) yang menunjukkan **di lapisan mana koneksi gagal**: fisik, layer 2, IP/DHCP, route, atau NAT. Ini mendukung empat status hasil di bagian prinsip umum.
+
+## 8. Sumber Internet
+
+Node untuk uji cepat: modem atau router ISP siap pakai. Node ini sudah memiliki IP gateway LAN (bawaan 192.168.1.1/24) dan DHCP server aktif (pool 192.168.1.2 sampai 192.168.1.254, DNS 8.8.8.8), serta **selalu punya internet selama menyala**, sehingga topologi tidak perlu dimulai dari Metro, OLT, ODC, ODP, dan ONT.
+
+Diperlakukan sebagai router: batas domain layer 2, pemberi DHCP, dan gateway. Tidak punya uplink optik, jadi aturan optik dan LOS tidak berlaku untuknya.
+
+| # | Kondisi | Hasil |
+|---|---|---|
+| 8.0 | Node ditambahkan dari palet kategori Infrastruktur | Langsung berisi IP gateway LAN dan DHCP aktif, dengan 4 port LAN ethernet |
+| 8.1 | Client dihubungkan langsung ke Sumber Internet | Client mendapat IP dari pool DHCP dan internet normal. Sumber Internet sendiri berstatus online |
+| 8.2 | Beberapa client lewat switch ke Sumber Internet | Semua internet normal, IP tiap client unik |
+| 8.3 | Sumber Internet disambung ke port WAN MikroTik, client di belakang MikroTik | Internet normal. Jika NAT MikroTik mati, client tidak ada internet (5.3.2) |
+| 8.4 | Sumber Internet dimatikan | Semua client di belakangnya tidak ada internet, dan kartunya Putus |
+| 8.5 | DHCP Sumber Internet dimatikan, client memakai DHCP | Client tersambung tapi tidak mendapat IP |
+| 8.6 | Client IP statis dengan gateway sama dengan IP Sumber Internet | Internet normal. Gateway salah: tidak ada internet |
+| 8.7 | ONT mode bridge (DHCP mati) di belakang Sumber Internet, client di ONT | Client mendapat IP dan internet dari Sumber Internet (perluasan aturan 2.1). IP bawaan ONT bridge tidak dihitung bentrok (2.7) |
+| 8.8 | Dua Sumber Internet dengan DHCP aktif di jaringan layer 2 yang sama | DHCP ganda (4A.9). Client tetap mendapat IP dan internet dari salah satunya |
+| 8.9 | Ping 8.8.8.8 dari client saat tidak ada node Internet | Menuju Sumber Internet. Ping ke IP gateway-nya menuju dirinya sendiri |
 
 ## Keputusan yang sudah dikonfirmasi pengguna
 

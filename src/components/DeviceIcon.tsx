@@ -14,6 +14,7 @@ interface DeviceStyle { Icon: LucideIcon; from: string; to: string }
 
 const STYLES: Record<string, DeviceStyle> = {
   internet:       { Icon: Globe,      from: '#38bdf8', to: '#0284c7' },
+  internet_source:{ Icon: Globe,      from: '#4ade80', to: '#15803d' },
   metro:          { Icon: Network,    from: '#818cf8', to: '#4f46e5' },
   olt:            { Icon: Server,     from: '#34d399', to: '#059669' },
   odc:            { Icon: Box,        from: '#fbbf24', to: '#d97706' },

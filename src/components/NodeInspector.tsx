@@ -43,6 +43,7 @@ import { cablesOnPort, portCapacity } from '../utils/portReconcile';
 import { SPLITTER_LOSS_MAP } from '../utils/opticalCalculator';
 import { findUpstreamGateway, isSameSubnet, isValidIpv4 } from '../utils/ipUtils';
 import { buildInternetAccessMap } from '../utils/internetAccessMap';
+import { INTERNET_SOURCE_IP_CONFIG } from '../data/internetSource';
 import { allocateDhcpLease, allocateStaticHost, lanDefaultsFor } from '../utils/ipAlloc';
 
 interface NodeInspectorProps {
@@ -135,6 +136,14 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
     () => buildInternetAccessMap(allNodes, allCables).get(node.id),
     [allNodes, allCables, node.id],
   );
+
+  // Sumber Internet: ubah satu bagian ipConfig tanpa menghapus bagian lainnya.
+  type IpPatch = Partial<NonNullable<NetworkNode['ipConfig']>>;
+  const updateSourceIp = (patch: IpPatch) =>
+    onUpdateNode({
+      ...node,
+      ipConfig: { ...INTERNET_SOURCE_IP_CONFIG, ...node.ipConfig, ...patch },
+    });
 
   const [activeTab, setActiveTab] = useState<'config' | 'telemetry' | 'hardware' | 'sop'>('config');
   const [showAddPortDropdown, setShowAddPortDropdown] = useState(false);
@@ -493,6 +502,54 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       ? `Perangkat berhasil terhubung ke gateway rute ${upstreamGateway?.name || 'Router'} (${routerLanIp}) dengan akses internet WAN aktif.`
                       : internetStatus.reason}
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* SUMBER INTERNET (modem/router ISP siap pakai) */}
+            {node.type === 'internet_source' && (
+              <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+                <div>
+                  <span className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider">Sumber Internet</span>
+                  <p className="mt-0.5 text-[10px] leading-tight text-slate-500">
+                    Modem/router ISP siap pakai. Selalu punya akses internet selama menyala, jadi tidak perlu Metro, OLT, ODP, dan ONT.
+                  </p>
+                </div>
+                <label className="flex cursor-pointer items-center justify-between rounded-lg border border-emerald-100 bg-white p-2">
+                  <div>
+                    <span className="text-xs font-bold text-slate-800">DHCP Server</span>
+                    <p className="text-[10px] text-slate-500">Bagi IP otomatis ke perangkat yang tersambung</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={node.ipConfig?.isDhcpServerEnabled ?? true}
+                    onChange={(e) => updateSourceIp({ isDhcpServerEnabled: e.target.checked })}
+                    className="h-4 w-4 accent-emerald-600"
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ['IP Gateway (LAN)', 'ip'],
+                    ['Subnet Mask', 'subnet'],
+                    ['Pool DHCP Awal', 'dhcpRangeStart'],
+                    ['Pool DHCP Akhir', 'dhcpRangeEnd'],
+                    ['DNS', 'dns'],
+                  ] as const).map(([label, key]) => {
+                    const value = node.ipConfig?.[key] ?? INTERNET_SOURCE_IP_CONFIG[key] ?? '';
+                    return (
+                      <label key={key} className="block">
+                        <span className="text-[10px] font-bold text-slate-600">{label}</span>
+                        <input
+                          type="text"
+                          value={value}
+                          onChange={(e) => updateSourceIp({ [key]: e.target.value } as IpPatch)}
+                          className={`mt-0.5 w-full rounded-md border px-2 py-1 font-mono text-xs text-slate-800 focus:outline-none ${
+                            isValidIpv4(value) ? 'border-slate-200 focus:border-emerald-500' : 'border-rose-400'
+                          }`}
+                        />
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             )}

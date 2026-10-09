@@ -123,7 +123,7 @@ export function findRouterConnectedToBridge(
     if (!currentNode) continue;
 
     if (currentId !== ontNode.id) {
-      if (['mikrotik', 'router'].includes(currentNode.type)) {
+      if (['mikrotik', 'router', 'internet_source'].includes(currentNode.type)) {
         if (currentNode.poweredOn) {
           return currentNode;
         }
@@ -180,7 +180,7 @@ export function findUpstreamGateway(
     // If we reached a router/gateway (ONT, MikroTik, Router) and it's not the startNode itself
     if (
       currentId !== startNode.id &&
-      ['ont', 'mikrotik', 'router'].includes(currentNode.type)
+      ['ont', 'mikrotik', 'router', 'internet_source'].includes(currentNode.type)
     ) {
       // If we reached an ONT in bridge mode, and a powered-on router exists behind it,
       // the true Layer 3 gateway for this host is that router!
@@ -230,7 +230,8 @@ export function checkInternetAccess(
     return { hasInternet: false, reason: 'Perangkat dalam keadaan mati (Power Off).' };
   }
 
-  if (node.type === 'internet') {
+  // Sumber Internet: sumber internet instan, selalu punya akses selama menyala (aturan 8.1).
+  if (node.type === 'internet' || node.type === 'internet_source') {
     return { hasInternet: true };
   }
 
@@ -418,7 +419,7 @@ export function findNodeByAddress<
   const owner = nodes.find((n) => addressOf(n) === ip);
   if (owner) return owner;
   if (ip === '8.8.8.8' || ip === '1.1.1.1') {
-    return nodes.find((n) => n.type === 'internet');
+    return nodes.find((n) => n.type === 'internet') ?? nodes.find((n) => n.type === 'internet_source');
   }
   return undefined;
 }

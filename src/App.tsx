@@ -16,6 +16,7 @@ import { BottomDock } from './components/BottomDock';
 
 import type { NetworkNode, CableConnection, NodeCableType, NodeType, ActiveTool, DevicePort, PortMedium, DiagnosticIssue } from './types/network';
 import type { TopologyTemplate } from './data/templates';
+import { INTERNET_SOURCE_IP_CONFIG } from './data/internetSource';
 import { TOPOLOGY_TEMPLATES } from './data/templates';
 import { DEVICE_METADATA } from './data/deviceDefinitions';
 import { DEVICE_BRANDS } from './data/deviceBrands';
@@ -508,6 +509,9 @@ export default function App() {
               // DHCP server competing with the upstream one.
               ...(type === 'router' ? { isDhcpServerEnabled: false } : {}),
             }
+          : type === 'internet_source'
+          // Sumber Internet langsung siap: IP gateway LAN terisi dan DHCP server aktif (aturan 8.0).
+          ? { ...INTERNET_SOURCE_IP_CONFIG }
           : type === 'ont'
           ? {
               mode: 'static',

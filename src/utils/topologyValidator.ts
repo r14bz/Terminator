@@ -78,6 +78,8 @@ function undefinedRulesFor(nodes: readonly NetworkNode[], ctx: RuleContext): str
 
 /** ONT ISP yang tersambung Layer 2 ke router: bila semuanya tanpa uplink optik, tidak ada internet (aturan 1.3, 6.4). */
 function upstreamOpticalBlocker(router: NetworkNode, ctx: RuleContext): NetworkNode | undefined {
+  // Sumber Internet tidak punya uplink optik; internetnya instan (aturan 8.1).
+  if (router.type === 'internet_source') return undefined;
   const hasUplink = (o: NetworkNode) => o.ontConfig?.ponStatus !== 'LOS (No Signal)'
     && ctx.cables.some((c) => c.status !== 'broken' && ['drop_core', 'distribusi', 'feeder'].includes(c.type) && (c.fromNodeId === o.id || c.toNodeId === o.id));
   // Gateway-nya sendiri ONT (mis. client di belakang ONT bridge yang tersambung ke ONT online, aturan 2.1):

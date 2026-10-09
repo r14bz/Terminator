@@ -14,6 +14,7 @@
  */
 export type NodeType =
   | 'internet'
+  | 'internet_source'
   | 'metro'
   | 'olt'
   | 'odc'

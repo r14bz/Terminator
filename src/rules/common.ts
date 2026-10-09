@@ -1,7 +1,7 @@
 import type { CableConnection, NetworkNode, DiagnosticIssue } from '../types/network';
 import type { RuleContext } from './types';
 import { isValidIpv4, ipToNumber, maskToPrefixLength } from '../utils/ipUtils';
-const ROUTERS = new Set(['router','mikrotik']); const CLIENTS = new Set(['pc','laptop','printer','voip_phone','cctv','smartphone','iot','server']); const L2_SWITCHES = new Set(['switch','switch_managed']);
+const ROUTERS = new Set(['router','mikrotik','internet_source']); const CLIENTS = new Set(['pc','laptop','printer','voip_phone','cctv','smartphone','iot','server']); const L2_SWITCHES = new Set(['switch','switch_managed']);
 export function issue(partial: Omit<DiagnosticIssue,'severity'> & {severity?:DiagnosticIssue['severity']}): DiagnosticIssue { return {severity:'critical',...partial}; }
 export function activeCable(c:CableConnection){return c.status!=='broken'&&c.status!=='mismatch';}
 export function neighbors(id:string,nodes:readonly NetworkNode[],cables:readonly CableConnection[]){const r:NetworkNode[]=[];for(const c of cables){if(!activeCable(c))continue;const oid=c.fromNodeId===id?c.toNodeId:c.toNodeId===id?c.fromNodeId:null;if(oid){const n=nodes.find(x=>x.id===oid);if(n)r.push(n)}}return r;}

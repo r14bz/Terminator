@@ -20,6 +20,26 @@ export const DEVICE_METADATA: Record<NodeType, DeviceMetadata> = {
     ],
     color: '#0284c7', // Sky blue
   },
+  internet_source: {
+    type: 'internet_source',
+    name: 'Sumber Internet',
+    category: 'infrastructure',
+    shortDesc: 'Modem/router ISP siap pakai: sudah punya IP dan DHCP aktif',
+    fullDescription: 'Sumber internet instan yang berperan sebagai modem atau router ISP. Selalu punya akses internet selama menyala, sudah memiliki IP gateway LAN, dan DHCP server-nya aktif, sehingga topologi bisa dimulai tanpa membangun Metro, OLT, ODC, ODP, dan ONT terlebih dahulu.',
+    technicianRole: 'Pengganti seluruh rantai hulu ISP. Hubungkan langsung ke port WAN MikroTik, router, switch, atau perangkat klien untuk menguji konfigurasi sisi pelanggan.',
+    technicianTips: [
+      'Hubungkan ke port WAN MikroTik, lalu atur default route MikroTik ke IP gateway Sumber Internet ini.',
+      'Matikan DHCP server di sini jika di belakangnya ada router atau MikroTik yang sudah membagikan IP, agar tidak terjadi DHCP ganda.',
+      'Untuk meniru kondisi nyata dengan OLT dan ONT, pakai rantai Metro, OLT, ODP, dan ONT. Node ini untuk uji cepat.'
+    ],
+    defaultPorts: [
+      { name: 'LAN 1', medium: 'ethernet' },
+      { name: 'LAN 2', medium: 'ethernet' },
+      { name: 'LAN 3', medium: 'ethernet' },
+      { name: 'LAN 4', medium: 'ethernet' },
+    ],
+    color: '#16a34a', // Hijau: internet siap
+  },
   metro: {
     type: 'metro',
     name: 'Metro Ethernet',
