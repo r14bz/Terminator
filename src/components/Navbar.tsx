@@ -116,7 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               src="/brand/terminator-logo.png"
               alt="Terminator - Terminal Network Simulator"
               width={640}
-              height={196}
+              height={147}
               draggable={false}
               className="h-9 sm:h-10 w-auto select-none"
             />
